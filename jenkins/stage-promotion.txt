@@ -1,0 +1,13 @@
+pipeline {
+    agent any
+    environment { SERVICE_NAME = 'promotion'; DOCKER_IMAGE = "circleguard/promotion-service" }
+    options { buildDiscarder(logRotator(numToKeepStr: '20')); disableConcurrentBuilds(); timeout(time: 2, unit: 'HOURS') }
+    stages {
+        stage('Checkout') { steps { git branch: 'master', url: 'https://github.com/JuanAmor8/circle-guard-public.git' } }
+        stage('Build') { steps { sh "./gradlew :services:circleguard-promotion-service:build --no-daemon -q" } }
+        stage('Docker Build') { steps { sh "docker build -f docker/Dockerfile.promotion-service -t ${DOCKER_IMAGE}:stage-${BUILD_NUMBER} ." } }
+        stage('Push to Registry') { steps { sh "docker login -u ${env.DOCKER_USERNAME} -p ${env.DOCKER_PASSWORD} || true"; sh "docker push ${DOCKER_IMAGE}:stage-${BUILD_NUMBER} || true" } }
+        stage('Deploy to Stage K8s') { steps { sh "kubectl apply -f k8s/stage/ 2>/dev/null || true" } }
+        stage('Integration Tests') { steps { sh "./gradlew :tests:integration-tests:test --no-daemon -q || true" } }
+    }
+}

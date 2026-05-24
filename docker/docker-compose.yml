@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+  auth-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.auth-service
+    container_name: cg-auth-service
+    ports:
+      - "8180:8180"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_auth
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_LDAP_URLS: ldap://openldap:389
+    depends_on:
+      - postgres
+      - openldap
+    networks:
+      - circleguard-net
+
+  identity-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.identity-service
+    container_name: cg-identity-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_identity
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - postgres
+    networks:
+      - circleguard-net
+
+  form-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.form-service
+    container_name: cg-form-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_form
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - circleguard-net
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.notification-service
+    container_name: cg-notification-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+      AUTH_API_URL: http://auth-service:8180
+    depends_on:
+      - kafka
+      - mailhog
+    networks:
+      - circleguard-net
+
+  promotion-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.promotion-service
+    container_name: cg-promotion-service
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_promotion
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_NEO4J_URI: bolt://neo4j:7687
+      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
+      SPRING_NEO4J_AUTHENTICATION_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      - postgres
+      - neo4j
+      - kafka
+      - redis
+    networks:
+      - circleguard-net
+
+  gateway-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway-service
+    container_name: cg-gateway-service
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      - redis
+    networks:
+      - circleguard-net
+
+  postgres:
+    image: postgres:16
+    container_name: cg-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_MULTIPLE_DATABASES: circleguard_auth,circleguard_identity,circleguard_form,circleguard_promotion
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - circleguard-net
+
+  neo4j:
+    image: neo4j:5.26
+    container_name: cg-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4jdata:/data
+    networks:
+      - circleguard-net
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: cg-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - circleguard-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: cg-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - circleguard-net
+
+  redis:
+    image: redis:7.2
+    container_name: cg-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - circleguard-net
+
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: cg-openldap
+    ports:
+      - "389:389"
+    environment:
+      LDAP_ORGANISATION: "CircleGuard"
+      LDAP_DOMAIN: "circleguard.edu"
+      LDAP_ADMIN_PASSWORD: "admin"
+    networks:
+      - circleguard-net
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: cg-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - circleguard-net
+
+volumes:
+  pgdata:
+  neo4jdata:
+
+networks:
+  circleguard-net:
+    driver: bridge

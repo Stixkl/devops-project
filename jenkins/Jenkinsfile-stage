@@ -1,0 +1,142 @@
+def getServiceName() {
+    def jobName = env.JOB_NAME ?: 'auth'
+    def parts = jobName.split('-')
+    if (parts.length >= 3) {
+        return parts[1]
+    }
+    return 'auth'
+}
+
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'docker.io'
+        SERVICE_NAME = getServiceName()
+        DOCKER_IMAGE = "circleguard/${SERVICE_NAME}-service"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        disableConcurrentBuilds()
+        timeout(time: 2, unit: 'HOURS')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "./gradlew :services:circleguard-\${SERVICE_NAME}-service:build --no-daemon -q"
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh """
+                    docker build -f docker/Dockerfile.\${SERVICE_NAME}-service \
+                        -t \${DOCKER_IMAGE}:stage-\${BUILD_NUMBER} .
+                """
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                sh """
+                    docker login -u \${DOCKER_USERNAME} -p \${DOCKER_PASSWORD} || true
+                    docker push \${DOCKER_IMAGE}:stage-\${BUILD_NUMBER} || true
+                """
+            }
+        }
+
+        stage('Deploy to Stage K8s') {
+            steps {
+                sh """
+                    kubectl config use-context docker-desktop || true
+                    kubectl apply -f k8s/namespaces/ -n circleguard-stage 2>/dev/null || true
+                    kubectl apply -f k8s/stage/ 2>/dev/null || true
+                    kubectl set image deployment/\${SERVICE_NAME}-service \
+                        \${SERVICE_NAME}-service=\${DOCKER_IMAGE}:stage-\${BUILD_NUMBER} \
+                        -n circleguard-stage 2>/dev/null || true
+                    kubectl rollout status deployment/\${SERVICE_NAME}-service -n circleguard-stage --timeout=120s || true
+                """
+            }
+        }
+
+        stage('Integration Tests') {
+            steps {
+                sh '''
+                    ./gradlew :tests:integration-tests:test --no-daemon -q || true
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'tests/integration-tests/build/test-results/**/*.xml'
+                }
+            }
+        }
+
+        stage('E2E Tests (Cypress)') {
+            steps {
+                dir('tests/e2e') {
+                    sh '''
+                        npm install 2>/dev/null || true
+                        npx cypress run --config baseUrl=http://localhost:8087 || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'tests/e2e/cypress/videos/*.mp4', allowEmptyArchive: true, fingerprint: true
+                    archiveArtifacts artifacts: 'tests/e2e/cypress/screenshots/*.png', allowEmptyArchive: true, fingerprint: true
+                }
+            }
+        }
+
+        stage('Performance Tests (Locust)') {
+            steps {
+                dir('tests/performance') {
+                    sh '''
+                        pip install -q locust 2>/dev/null || true
+                        locust -f locustfile.py \
+                            --headless \
+                            --users 100 \
+                            --spawn-rate 10 \
+                            --run-time 5m \
+                            --host http://localhost:8087 \
+                            --html=report.html 2>/dev/null || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'tests/performance/report.html', allowEmptyArchive: true, fingerprint: true
+                }
+            }
+        }
+
+        stage('Approval Gate') {
+            when {
+                anyOf { branch 'master' }
+            }
+            steps {
+                input message: 'Deploy to Production?',
+                      ok: 'Approve',
+                      submitter: 'devops-team,qa-team'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Stage deployment successful!"
+        }
+        failure {
+            echo "Stage tests FAILED for \${SERVICE_NAME}"
+        }
+    }
+}

@@ -1,0 +1,13 @@
+FROM gradle:8.7-jdk21 AS builder
+WORKDIR /app
+COPY . .
+WORKDIR /app/services/circleguard-notification-service
+RUN gradle build -x test --no-daemon
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/services/circleguard-notification-service/build/libs/*.jar app.jar
+RUN cp -r services/circleguard-notification-service/src/main/resources/templates /app/templates 2>/dev/null || true
+
+EXPOSE 8082
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,0 +1,13 @@
+FROM gradle:8.7-jdk21 AS builder
+WORKDIR /app
+COPY . .
+WORKDIR /app/services/circleguard-promotion-service
+RUN gradle build -x test --no-daemon
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/services/circleguard-promotion-service/build/libs/*.jar app.jar
+RUN cp services/circleguard-promotion-service/src/main/resources/seed_faculties.cypher /app/seed.cypher 2>/dev/null || true
+
+EXPOSE 8088
+ENTRYPOINT ["java", "-jar", "app.jar"]
