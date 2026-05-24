@@ -16,7 +16,15 @@ public class FileUploadController {
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, String>> upload(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "File is empty or missing"));
+        }
         String filename = storageService.saveFile(file);
         return ResponseEntity.ok(Map.of("filename", filename));
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        return ResponseEntity.internalServerError().body(Map.of("error", ex.getMessage()));
     }
 }

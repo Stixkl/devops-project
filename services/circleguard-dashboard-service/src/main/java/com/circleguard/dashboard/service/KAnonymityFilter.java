@@ -52,13 +52,18 @@ public class KAnonymityFilter {
         }
 
         // Mask individual count fields below K
+        boolean anyMasked = false;
         for (Map.Entry<String, Object> entry : new LinkedHashMap<>(filtered).entrySet()) {
             if (entry.getKey().endsWith("Count") && entry.getValue() instanceof Number) {
                 long count = ((Number) entry.getValue()).longValue();
                 if (count > 0 && count < k) {
                     filtered.put(entry.getKey(), "<" + k);
+                    anyMasked = true;
                 }
             }
+        }
+        if (anyMasked) {
+            filtered.put("note", "Insufficient data for privacy");
         }
 
         return filtered;

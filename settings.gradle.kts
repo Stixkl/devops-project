@@ -5,11 +5,11 @@ pluginManagement {
     }
 }
 
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
-}
-
 rootProject.name = "circleguard"
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+enableFeaturePreview("STABLE_CONFIGURATION_CACHE")
 
 // Shared Libraries (Commented out as folders are missing on disk)
 // include("libs:circleguard-common")

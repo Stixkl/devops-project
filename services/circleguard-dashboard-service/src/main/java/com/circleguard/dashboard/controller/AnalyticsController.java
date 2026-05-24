@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/analytics")
@@ -38,5 +39,10 @@ public class AnalyticsController {
             @RequestParam(defaultValue = "hourly") String period,
             @RequestParam(defaultValue = "24") int limit) {
         return ResponseEntity.ok(analyticsService.getTimeSeries(period, limit));
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        return ResponseEntity.internalServerError().body(Map.of("error", ex.getMessage()));
     }
 }
