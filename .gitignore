@@ -8,10 +8,17 @@ build/
 *.class
 *.jar
 *.war
+*.nar
 *.ear
 *.zip
 *.tar.gz
 *.rar
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
 
 # Maven
 target/
@@ -59,3 +66,7 @@ scratch/
 dashboard_test_output.txt
 **/test-output.txt
 tests/integration-tests/bin/
+
+# virtual machine crash logs
+hs_err_pid*
+replay_pid*
