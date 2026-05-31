@@ -10,6 +10,16 @@ plugins {
     kotlin("plugin.spring") version "1.9.24" apply false
     kotlin("plugin.jpa") version "1.9.24" apply false
     id("org.owasp.dependencycheck") version "9.0.9" apply false
+    id("org.sonarqube") version "5.0.0.4638"
+}
+
+sonar {
+    properties {
+        property("sonar.projectKey", "circleguard")
+        property("sonar.projectName", "CircleGuard")
+        property("sonar.coverage.jacoco.xmlReportPaths", "**/build/reports/jacoco/jacoco.xml")
+        property("sonar.java.source", "21")
+    }
 }
 
 allprojects {
