@@ -1,0 +1,133 @@
+# Least-privilege RBAC for the CI/CD deployer.
+# Replaces the previous cluster-admin ClusterRoleBinding.
+# One ServiceAccount + namespaced Role + RoleBinding per environment,
+# granting only the verbs needed to deploy the application workloads.
+
+# ---------------- dev ----------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cg-deployer
+  namespace: circleguard-dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cg-deployer
+  namespace: circleguard-dev
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services", "pods", "configmaps", "secrets", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cg-deployer
+  namespace: circleguard-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cg-deployer
+subjects:
+- kind: ServiceAccount
+  name: cg-deployer
+  namespace: circleguard-dev
+---
+# ---------------- stage ----------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cg-deployer
+  namespace: circleguard-stage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cg-deployer
+  namespace: circleguard-stage
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services", "pods", "configmaps", "secrets", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cg-deployer
+  namespace: circleguard-stage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cg-deployer
+subjects:
+- kind: ServiceAccount
+  name: cg-deployer
+  namespace: circleguard-stage
+---
+# ---------------- master (prod) ----------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cg-deployer
+  namespace: circleguard-master
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cg-deployer
+  namespace: circleguard-master
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services", "pods", "configmaps", "secrets", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cg-deployer
+  namespace: circleguard-master
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cg-deployer
+subjects:
+- kind: ServiceAccount
+  name: cg-deployer
+  namespace: circleguard-master
