@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: form-service
+  namespace: circleguard-stage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: form-service
+  template:
+    metadata:
+      labels:
+        app: form-service
+    spec:
+      containers:
+      - name: form-service
+        image: juanamor8/circleguard-form-service:stage-${BUILD_NUMBER}
+        ports:
+        - containerPort: 8086
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/circleguard_form"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: form-service
+  namespace: circleguard-stage
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8086
+    targetPort: 8086
+  selector:
+    app: form-service

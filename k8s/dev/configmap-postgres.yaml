@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: circleguard-dev
+data:
+  POSTGRES_DB: circleguard
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: password

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-service
+  namespace: circleguard-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-service
+  template:
+    metadata:
+      labels:
+        app: file-service
+    spec:
+      containers:
+      - name: file-service
+        image: juanamor8/circleguard-file-service:latest
+        ports:
+        - containerPort: 8085
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8085
+          initialDelaySeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8085
+          initialDelaySeconds: 30
