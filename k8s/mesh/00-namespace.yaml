@@ -1,0 +1,10 @@
+# Demo namespace for the CircleGuard service mesh (Linkerd).
+# The linkerd.io/inject=enabled annotation makes the proxy-injector
+# webhook add a linkerd2-proxy sidecar to every pod created here, which
+# is what provides automatic mutual TLS, retries and metrics.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-mesh
+  annotations:
+    linkerd.io/inject: enabled

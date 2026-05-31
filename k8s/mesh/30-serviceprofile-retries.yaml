@@ -1,0 +1,22 @@
+# Retries and retry budget for the backend, expressed as a Linkerd
+# ServiceProfile. The resource name MUST be the FQDN of the apex Service.
+# Routes marked isRetryable are automatically retried by the client-side
+# proxy; the retryBudget caps retries so they can never amplify load by
+# more than 20% (plus 10 free retries/s) of the original request volume.
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: backend.circleguard-mesh.svc.cluster.local
+  namespace: circleguard-mesh
+spec:
+  routes:
+  - name: GET /
+    condition:
+      method: GET
+      pathRegex: /
+    isRetryable: true
+    timeout: 2s
+  retryBudget:
+    retryRatio: 0.2
+    minRetriesPerSecond: 10
+    ttl: 10s
