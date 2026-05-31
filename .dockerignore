@@ -1,0 +1,15 @@
+.git
+.gradle
+build
+**/build
+**/bin
+.github
+docs
+design-assets
+scratch
+mobile/node_modules
+load-tests
+*.md
+commit_msg.txt
+dashboard_test_output.txt
+services/*/uploads
