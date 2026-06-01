@@ -30,6 +30,22 @@ qr:
   secret: "my-qr-secret-key-for-dev-1234567890"
   expiration: 300
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      auth:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+  retry:
+    instances:
+      auth:
+        max-attempts: 3
+        wait-duration: 500ms
+
 server:
   port: 8082
 management:
