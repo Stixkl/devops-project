@@ -1,6 +1,7 @@
 package com.circleguard.dashboard.service;
 
 import com.circleguard.dashboard.client.PromotionClient;
+import com.circleguard.dashboard.config.DashboardProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ public class AnalyticsService {
     private final JdbcTemplate jdbc;
     private final PromotionClient promotionClient;
     private final KAnonymityFilter kAnonymityFilter;
+    private final DashboardProperties properties;
 
     /**
      * Gets campus-wide health summary from promotion-service.
@@ -24,6 +26,13 @@ public class AnalyticsService {
      * Gets department-filtered health stats with K-Anonymity applied.
      */
     public Map<String, Object> getDepartmentStats(String department) {
+        if (!properties.getFeatures().isDepartmentStatsEnabled()) {
+            return Map.of(
+                    "department", department,
+                    "disabled", true,
+                    "message", "Department stats feature is currently disabled"
+            );
+        }
         Map<String, Object> raw = promotionClient.getHealthStatsByDepartment(department);
         return kAnonymityFilter.apply(raw);
     }
