@@ -1,6 +1,7 @@
 package com.circleguard.dashboard.service;
 
 import com.circleguard.dashboard.client.PromotionClient;
+import com.circleguard.dashboard.config.DashboardProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -23,7 +24,20 @@ class AnalyticsServiceTest {
         promotionClient = Mockito.mock(PromotionClient.class);
         jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         kAnonymityFilter = new KAnonymityFilter();
-        analyticsService = new AnalyticsService(jdbcTemplate, promotionClient, kAnonymityFilter);
+        analyticsService = new AnalyticsService(jdbcTemplate, promotionClient, kAnonymityFilter, new DashboardProperties());
+    }
+
+    @Test
+    void getDepartmentStats_WhenFeatureDisabled_ShouldReturnDegradedResponse() {
+        DashboardProperties disabled = new DashboardProperties();
+        disabled.getFeatures().setDepartmentStatsEnabled(false);
+        AnalyticsService service = new AnalyticsService(jdbcTemplate, promotionClient, kAnonymityFilter, disabled);
+
+        Map<String, Object> result = service.getDepartmentStats("CS");
+
+        assertEquals(true, result.get("disabled"));
+        assertEquals("CS", result.get("department"));
+        verify(promotionClient, never()).getHealthStatsByDepartment(anyString());
     }
 
     @Test

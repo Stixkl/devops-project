@@ -1,12 +1,26 @@
 package com.circleguard.dashboard;
 
 import com.circleguard.dashboard.client.PromotionClient;
+import com.circleguard.dashboard.config.DashboardProperties;
+import com.circleguard.dashboard.config.RestClientConfig;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 
 import java.util.Map;
@@ -14,9 +28,29 @@ import java.util.Map;
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@SpringBootTest(
+        classes = DashboardIntegrationTest.TestApp.class,
+        properties = "circleguard.promotion-service.url=http://localhost:8089"
+)
 class DashboardIntegrationTest {
 
+    @Configuration
+    @EnableAutoConfiguration(exclude = {
+            DataSourceAutoConfiguration.class,
+            DataSourceTransactionManagerAutoConfiguration.class,
+            HibernateJpaAutoConfiguration.class,
+            JdbcTemplateAutoConfiguration.class,
+            FlywayAutoConfiguration.class
+    })
+    @ComponentScan(basePackages = "com.circleguard.dashboard.client")
+    @ConfigurationPropertiesScan(basePackages = "com.circleguard.dashboard.config")
+    @Import(RestClientConfig.class)
+    static class TestApp {
+    }
+
     private static WireMockServer wireMockServer;
+
+    @Autowired
     private PromotionClient client;
 
     @BeforeAll
@@ -34,12 +68,8 @@ class DashboardIntegrationTest {
     }
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         wireMockServer.resetAll();
-        client = new PromotionClient();
-        var field = PromotionClient.class.getDeclaredField("promotionServiceUrl");
-        field.setAccessible(true);
-        field.set(client, "http://localhost:8089");
     }
 
     @Test
@@ -76,7 +106,7 @@ class DashboardIntegrationTest {
     }
 
     @Test
-    void getHealthStats_WhenPromotionServiceDown_ShouldReturnErrorMap() {
+    void getHealthStats_WhenPromotionServiceDown_ShouldReturnErrorMapViaCircuitBreakerFallback() {
         wireMockServer.stubFor(get(urlEqualTo("/api/v1/health-status/stats"))
                 .willReturn(aResponse().withStatus(HttpStatus.SERVICE_UNAVAILABLE.value())));
 
