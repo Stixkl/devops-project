@@ -23,6 +23,7 @@ public class HealthStatusService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final com.circleguard.promotion.repository.jpa.SystemSettingsRepository systemSettingsRepository;
     private final com.circleguard.promotion.repository.graph.CircleNodeRepository circleNodeRepository;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     private static final String STATUS_KEY_PREFIX = "user:status:";
     private static final String TOPIC_STATUS_CHANGED = "promotion.status.changed";
@@ -117,6 +118,10 @@ public class HealthStatusService {
             payload.put("timestamp", System.currentTimeMillis());
 
             kafkaTemplate.send(TOPIC_STATUS_CHANGED, anonymousId, payload);
+
+            // Business metric: count health-status transitions by resulting status,
+            // so Grafana can chart epidemiological signal (e.g. CONFIRMED cases over time).
+            meterRegistry.counter("circleguard_health_status_changes_total", "status", status).increment();
 
             // Story 5.4: Automated Room Reservation Cancellation
             checkAndBroadcastFencedCircles(anonymousId);

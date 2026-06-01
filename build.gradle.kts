@@ -52,6 +52,13 @@ subprojects {
         "testCompileOnly"("org.projectlombok:lombok")
         "testAnnotationProcessor"("org.projectlombok:lombok")
         "implementation"("org.jetbrains.kotlin:kotlin-reflect")
+        // Observability: Prometheus metrics scrape endpoint + distributed tracing
+        // (Micrometer Tracing bridged to OpenTelemetry, exported over OTLP to Jaeger).
+        "implementation"("io.micrometer:micrometer-registry-prometheus")
+        "implementation"("io.micrometer:micrometer-tracing-bridge-otel")
+        "implementation"("io.opentelemetry:opentelemetry-exporter-otlp")
+        // Structured JSON logging shipped to Logstash (ELK) via a Logback TCP appender.
+        "implementation"("net.logstash.logback:logstash-logback-encoder:7.4")
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
         "testRuntimeOnly"("com.h2database:h2")
         "testImplementation"("org.testcontainers:junit-jupiter:1.20.1")
