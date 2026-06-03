@@ -1,0 +1,14 @@
+# Terraform ignored files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Azure CLI auth (si se usa para backend)
+.python-version
+.env
