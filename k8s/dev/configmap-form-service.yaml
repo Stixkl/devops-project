@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: form-service-config
+  namespace: circleguard-dev
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_form"
+  DB_USERNAME: "admin"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  SERVER_PORT: "8086"

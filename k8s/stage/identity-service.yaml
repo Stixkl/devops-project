@@ -18,9 +18,11 @@ spec:
         image: circleguard/identity-service:stage-${BUILD_NUMBER}
         ports:
         - containerPort: 8083
-        env:
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgres:5432/circleguard_identity"
+        envFrom:
+        - configMapRef:
+            name: identity-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "256Mi"

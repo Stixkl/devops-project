@@ -20,13 +20,11 @@ spec:
         image: circleguard/promotion-service:${RELEASE_VERSION}
         ports:
         - containerPort: 8088
-        env:
-        - name: SPRING_NEO4J_URI
-          value: "bolt://neo4j-prod:7687"
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka-prod:9092"
-        - name: SPRING_DATA_REDIS_HOST
-          value: "redis-prod"
+        envFrom:
+        - configMapRef:
+            name: promotion-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "1Gi"

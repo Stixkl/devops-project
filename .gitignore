@@ -54,6 +54,9 @@ web-build/
 pgdata/
 neo4jdata/
 
+# Environment variables (secrets)
+.env
+
 # AI/Claude context
 .claude/
 

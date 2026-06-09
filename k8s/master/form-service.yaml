@@ -20,9 +20,11 @@ spec:
         image: circleguard/form-service:${RELEASE_VERSION}
         ports:
         - containerPort: 8086
-        env:
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka-prod:9092"
+        envFrom:
+        - configMapRef:
+            name: form-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "512Mi"

@@ -21,15 +21,12 @@ spec:
         image: circleguard/auth-service:stage-${BUILD_NUMBER}
         ports:
         - containerPort: 8180
+        envFrom:
+        - configMapRef:
+            name: auth-service-config
+        - secretRef:
+            name: circleguard-secrets
         env:
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgres:5432/circleguard_auth"
-        - name: SPRING_DATASOURCE_USERNAME
-          value: "admin"
-        - name: SPRING_DATASOURCE_PASSWORD
-          value: "password"
-        - name: SPRING_LDAP_URLS
-          value: "ldap://openldap:389"
         - name: JAVA_OPTS
           value: "-Xmx512m -Xms256m -XX:+UseG1GC"
         resources:

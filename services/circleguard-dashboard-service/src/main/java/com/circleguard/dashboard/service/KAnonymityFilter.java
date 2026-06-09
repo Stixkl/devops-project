@@ -1,18 +1,15 @@
 package com.circleguard.dashboard.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Privacy-First K-Anonymity Engine (Story 7.5, FR-23).
- * Masks any metric group with fewer than K users to prevent
- * individual identification in small departments/buildings.
- */
 @Component
 public class KAnonymityFilter {
 
-    private static final int DEFAULT_K = 5;
+    @Value("${K_ANONYMITY_THRESHOLD:5}")
+    private int DEFAULT_K;
 
     /**
      * Applies k-anonymity masking to a stats map.

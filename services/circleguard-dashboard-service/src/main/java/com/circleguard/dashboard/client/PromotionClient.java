@@ -13,7 +13,7 @@ public class PromotionClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${circleguard.promotion-service.url:http://localhost:8088}")
+    @Value("${PROMOTION_SERVICE_URL:http://localhost:8088}")
     private String promotionServiceUrl;
 
     @SuppressWarnings("unchecked")

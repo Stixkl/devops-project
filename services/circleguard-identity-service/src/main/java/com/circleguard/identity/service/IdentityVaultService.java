@@ -18,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class IdentityVaultService {
     private final IdentityMappingRepository repository;
 
-    @Value("${vault.hash-salt:circleguard-default-salt}")
+    @Value("${vault.hash-salt:12345678}")
     private String hashSalt;
 
     /**

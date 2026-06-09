@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: circleguard-dev
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  MAIL_HOST: "mailhog"
+  MAIL_PORT: "1025"
+  AUTH_SERVICE_URL: "http://auth-service:8180"
+  IDENTITY_SERVICE_URL: "http://identity-service:8083"
+  NOTIFICATION_URL_TESTING: "https://circleguard.example.com/testing"
+  NOTIFICATION_URL_ISOLATION: "https://circleguard.example.com/isolation"
+  NOTIFICATION_EMAIL_DOMAIN: "@example.com"
+  GOTIFY_URL: "http://gotify:8080"
+  ROOM_BOOKING_API_URL: "https://facilities.university.edu/api/v1/rooms"
+  LMS_API_URL: "https://lms.university.edu/api/v1"
+  JWT_EXPIRATION_MS: "3600000"
+  QR_EXPIRATION_SECONDS: "300"
+  SERVER_PORT: "8082"

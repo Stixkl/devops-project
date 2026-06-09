@@ -23,19 +23,11 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8180
-        env:
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgres:5432/circleguard_auth"
-        - name: SPRING_DATASOURCE_USERNAME
-          value: "admin"
-        - name: SPRING_DATASOURCE_PASSWORD
-          value: "password"
-        - name: SPRING_LDAP_URLS
-          value: "ldap://host.docker.internal:389"
-        - name: SPRING_LDAP_USERNAME
-          value: "cn=admin,dc=circleguard,dc=edu"
-        - name: SPRING_LDAP_PASSWORD
-          value: "admin"
+        envFrom:
+        - configMapRef:
+            name: auth-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "256Mi"

@@ -5,6 +5,7 @@ import com.circleguard.promotion.repository.graph.CircleNodeRepository;
 import com.circleguard.promotion.repository.graph.UserNodeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +21,8 @@ public class AutoCircleService {
     private final CircleNodeRepository circleRepository;
     private final CircleService circleService;
 
-    // Threshold: 1 hour (3600 seconds) of cumulative duration
-    private static final long AUTO_THRESHOLD_SECONDS = 3600;
+    @Value("${AUTO_THRESHOLD_SECONDS:3600}")
+    private long AUTO_THRESHOLD_SECONDS;
 
     /**
      * Analyzes encounters between two users and elevates to a safety circle if high-trust is detected.

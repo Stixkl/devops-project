@@ -7,12 +7,14 @@ services:
       dockerfile: docker/Dockerfile.auth-service
     container_name: cg-auth-service
     ports:
-      - "8180:8180"
+      - "${AUTH_PORT:-8180}:8180"
+    env_file:
+      - ../.env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_auth
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_LDAP_URLS: ldap://openldap:389
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/circleguard_auth"
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-password}
+      SPRING_LDAP_URLS: ${LDAP_URL:-ldap://openldap:389}
     depends_on:
       - postgres
       - openldap
@@ -25,11 +27,13 @@ services:
       dockerfile: docker/Dockerfile.identity-service
     container_name: cg-identity-service
     ports:
-      - "8083:8083"
+      - "${IDENTITY_PORT:-8083}:8083"
+    env_file:
+      - ../.env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_identity
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/circleguard_identity"
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-password}
     depends_on:
       - postgres
     networks:
@@ -41,12 +45,14 @@ services:
       dockerfile: docker/Dockerfile.form-service
     container_name: cg-form-service
     ports:
-      - "8086:8086"
+      - "${FORM_PORT:-8086}:8086"
+    env_file:
+      - ../.env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_form
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/circleguard_form"
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-password}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
     depends_on:
       - postgres
       - kafka
@@ -59,12 +65,14 @@ services:
       dockerfile: docker/Dockerfile.notification-service
     container_name: cg-notification-service
     ports:
-      - "8082:8082"
+      - "${NOTIFICATION_PORT:-8082}:8082"
+    env_file:
+      - ../.env
     environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SPRING_MAIL_HOST: mailhog
-      SPRING_MAIL_PORT: 1025
-      AUTH_API_URL: http://auth-service:8180
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      SPRING_MAIL_HOST: ${MAIL_HOST:-mailhog}
+      SPRING_MAIL_PORT: ${MAIL_PORT:-1025}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8180}
     depends_on:
       - kafka
       - mailhog
@@ -77,17 +85,19 @@ services:
       dockerfile: docker/Dockerfile.promotion-service
     container_name: cg-promotion-service
     ports:
-      - "8088:8088"
+      - "${PROMOTION_PORT:-8088}:8088"
+    env_file:
+      - ../.env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/circleguard_promotion
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_NEO4J_URI: bolt://neo4j:7687
-      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
-      SPRING_NEO4J_AUTHENTICATION_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/circleguard_promotion"
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-password}
+      SPRING_NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      SPRING_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-password}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - postgres
       - neo4j
@@ -102,12 +112,47 @@ services:
       dockerfile: docker/Dockerfile.gateway-service
     container_name: cg-gateway-service
     ports:
-      - "8087:8087"
+      - "${GATEWAY_PORT:-8087}:8087"
+    env_file:
+      - ../.env
     environment:
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - redis
+    networks:
+      - circleguard-net
+
+  dashboard-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard-service
+    container_name: cg-dashboard-service
+    ports:
+      - "${DASHBOARD_PORT:-8084}:8084"
+    env_file:
+      - ../.env
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/circleguard_dashboard"
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-password}
+      PROMOTION_SERVICE_URL: ${PROMOTION_SERVICE_URL:-http://promotion-service:8088}
+    depends_on:
+      - postgres
+    networks:
+      - circleguard-net
+
+  file-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.file-service
+    container_name: cg-file-service
+    ports:
+      - "${FILE_PORT:-8085}:8085"
+    env_file:
+      - ../.env
+    environment:
+      FILE_UPLOAD_DIR: ${FILE_UPLOAD_DIR:-uploads}
     networks:
       - circleguard-net
 
@@ -115,8 +160,8 @@ services:
     image: postgres:16
     container_name: cg-postgres
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: ${DB_USERNAME:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
       POSTGRES_MULTIPLE_DATABASES: circleguard_auth,circleguard_identity,circleguard_form,circleguard_promotion
     ports:
       - "5432:5432"
@@ -133,7 +178,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/password
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
       NEO4J_PLUGINS: '["apoc"]'
     volumes:
       - neo4jdata:/data
@@ -182,7 +227,7 @@ services:
     environment:
       LDAP_ORGANISATION: "CircleGuard"
       LDAP_DOMAIN: "circleguard.edu"
-      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_ADMIN_PASSWORD: ${LDAP_BIND_PASSWORD:-admin}
     networks:
       - circleguard-net
 

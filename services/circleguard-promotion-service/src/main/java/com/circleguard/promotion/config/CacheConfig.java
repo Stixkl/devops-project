@@ -22,7 +22,7 @@ public class CacheConfig {
                 .maximumSize(10000)
                 .expireAfterWrite(5, TimeUnit.MINUTES)
                 .recordStats());
-        
+
         cacheManager.setCacheNames(Arrays.asList("userStatus", "proximityMatches", "buildingMetadata", "systemSettings"));
         return cacheManager;
     }

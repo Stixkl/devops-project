@@ -21,13 +21,11 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8083
-        env:
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgres:5432/circleguard_identity"
-        - name: SPRING_DATASOURCE_USERNAME
-          value: "admin"
-        - name: SPRING_DATASOURCE_PASSWORD
-          value: "password"
+        envFrom:
+        - configMapRef:
+            name: identity-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "256Mi"

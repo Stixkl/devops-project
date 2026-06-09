@@ -18,11 +18,11 @@ spec:
         image: circleguard/notification-service:stage-${BUILD_NUMBER}
         ports:
         - containerPort: 8082
-        env:
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
-        - name: AUTH_API_URL
-          value: "http://auth-service:8180"
+        envFrom:
+        - configMapRef:
+            name: notification-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "256Mi"

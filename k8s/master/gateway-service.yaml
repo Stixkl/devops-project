@@ -20,9 +20,11 @@ spec:
         image: circleguard/gateway-service:${RELEASE_VERSION}
         ports:
         - containerPort: 8087
-        env:
-        - name: SPRING_DATA_REDIS_HOST
-          value: "redis-prod"
+        envFrom:
+        - configMapRef:
+            name: gateway-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "512Mi"

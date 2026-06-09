@@ -54,10 +54,23 @@ pipeline {
         }
 
         stage('Deploy to Stage K8s') {
+            environment {
+                DB_PASSWORD = credentials('stage-db-password')
+                JWT_SECRET = credentials('stage-jwt-secret')
+                QR_SECRET = credentials('stage-qr-secret')
+                VAULT_SECRET = credentials('stage-vault-secret')
+                TWILIO_ACCOUNT_SID = credentials('stage-twilio-sid')
+                TWILIO_AUTH_TOKEN = credentials('stage-twilio-token')
+                GOTIFY_TOKEN = credentials('stage-gotify-token')
+                CORS_ORIGINS = "${CORS_ORIGINS}"
+            }
             steps {
                 sh """
                     kubectl config use-context docker-desktop || true
                     kubectl apply -f k8s/namespaces/ -n circleguard-stage 2>/dev/null || true
+                    # Substituir placeholders en configmaps y secrets antes de aplicar
+                    envsubst < k8s/stage/configmaps.yaml | kubectl apply -f - -n circleguard-stage || true
+                    envsubst < k8s/stage/secrets.yaml | kubectl apply -f - -n circleguard-stage || true
                     kubectl apply -f k8s/stage/ 2>/dev/null || true
                     kubectl set image deployment/\${SERVICE_NAME}-service \
                         \${SERVICE_NAME}-service=\${DOCKER_IMAGE}:stage-\${BUILD_NUMBER} \

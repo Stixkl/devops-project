@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: file-service-config
+  namespace: circleguard-dev
+data:
+  SERVER_PORT: "8085"
+  FILE_UPLOAD_DIR: "uploads"

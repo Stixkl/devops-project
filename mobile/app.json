@@ -35,6 +35,16 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "authUrl": "http://localhost:8180",
+      "dashboardUrl": "http://localhost:8084",
+      "fileUrl": "http://localhost:8085",
+      "formUrl": "http://localhost:8086",
+      "gatewayUrl": "http://localhost:8087",
+      "identityUrl": "http://localhost:8083",
+      "notificationUrl": "http://localhost:8082",
+      "promotionUrl": "http://localhost:8088"
     }
   }
 }

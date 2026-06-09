@@ -4,6 +4,7 @@ import com.circleguard.promotion.exception.FenceException;
 import com.circleguard.promotion.repository.graph.UserNodeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -27,6 +28,21 @@ public class HealthStatusService {
     private static final String STATUS_KEY_PREFIX = "user:status:";
     private static final String TOPIC_STATUS_CHANGED = "promotion.status.changed";
 
+    @Value("${BATCH_SIZE:2000}")
+    private int BATCH_SIZE;
+
+    @Value("${RECOVERED_TTL_DAYS:30}")
+    private int RECOVERED_TTL_DAYS;
+
+    @Value("${ENCOUNTER_WINDOW_DAYS:14}")
+    private int ENCOUNTER_WINDOW_DAYS;
+
+    @Value("${MANDATORY_FENCE_DAYS:14}")
+    private int MANDATORY_FENCE_DAYS;
+
+    @Value("${AUTO_THRESHOLD_SECONDS:3600}")
+    private long AUTO_THRESHOLD_SECONDS;
+
     /**
      * Updates a user's health status and triggers recursive fencing if required.
      * Consolidated into a single transaction with optimized Cypher to meet NFR-1 (<1s target).
@@ -46,10 +62,10 @@ public class HealthStatusService {
         
         var settings = systemSettingsRepository.getSettings()
                 .orElse(com.circleguard.promotion.model.jpa.SystemSettings.builder()
-                        .encounterWindowDays(14)
-                        .mandatoryFenceDays(14)
+                        .encounterWindowDays(ENCOUNTER_WINDOW_DAYS)
+                        .mandatoryFenceDays(MANDATORY_FENCE_DAYS)
                         .unconfirmedFencingEnabled(true)
-                        .autoThresholdSeconds(3600L)
+                        .autoThresholdSeconds(AUTO_THRESHOLD_SECONDS)
                         .build());
         
         long threshold = System.currentTimeMillis() - ((long)settings.getEncounterWindowDays() * 24 * 60 * 60 * 1000);
@@ -155,7 +171,7 @@ public class HealthStatusService {
         Map<String, String> batch = new HashMap<>();
         updates.forEach((key, value) -> {
             batch.put(key, value);
-            if (batch.size() >= 2000) {
+            if (batch.size() >= BATCH_SIZE) {
                 redisTemplate.opsForValue().multiSet(batch);
                 batch.clear();
             }
@@ -278,9 +294,9 @@ public class HealthStatusService {
         neo4jClient.query("MATCH (u:User {anonymousId: $id}) SET u.status = 'RECOVERED'")
                 .bind(anonymousId).to("id").run();
         
-        // Immunize in Redis for 30 days
+        // Immunize in Redis for configured TTL
         redisTemplate.opsForValue().set(STATUS_KEY_PREFIX + anonymousId, "RECOVERED");
-        redisTemplate.expire(STATUS_KEY_PREFIX + anonymousId, java.time.Duration.ofDays(30));
+        redisTemplate.expire(STATUS_KEY_PREFIX + anonymousId, java.time.Duration.ofDays(RECOVERED_TTL_DAYS));
     }
     private void checkFenceWindow(String anonymousId) {
         var userOpt = userNodeRepository.findById(anonymousId);

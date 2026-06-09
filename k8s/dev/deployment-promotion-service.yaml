@@ -18,25 +18,11 @@ spec:
         image: juanamor8/circleguard-promotion-service:latest
         ports:
         - containerPort: 8088
-        env:
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgres:5432/circleguard_promotion"
-        - name: SPRING_DATASOURCE_USERNAME
-          value: "admin"
-        - name: SPRING_DATASOURCE_PASSWORD
-          value: "password"
-        - name: SPRING_NEO4J_URI
-          value: "bolt://neo4j:7687"
-        - name: SPRING_NEO4J_AUTHENTICATION_USERNAME
-          value: "neo4j"
-        - name: SPRING_NEO4J_AUTHENTICATION_PASSWORD
-          value: "password"
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
-        - name: SPRING_DATA_REDIS_HOST
-          value: "redis"
-        - name: SPRING_DATA_REDIS_PORT
-          value: "6379"
+        envFrom:
+        - configMapRef:
+            name: promotion-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "512Mi"

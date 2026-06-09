@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: circleguard-stage
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_auth"
+  DB_USERNAME: "admin"
+  LDAP_URL: "ldap://openldap:389"
+  LDAP_BASE_DN: "dc=circleguard,dc=edu"
+  LDAP_BIND_DN: "cn=admin,dc=circleguard,dc=edu"
+  JWT_EXPIRATION_MS: "3600000"
+  QR_EXPIRATION_SECONDS: "300"
+  SERVER_PORT: "8180"
+  CORS_ALLOWED_ORIGINS: "${CORS_ORIGINS}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: identity-service-config
+  namespace: circleguard-stage
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_identity"
+  DB_USERNAME: "admin"
+  SERVER_PORT: "8083"
+  CORS_ALLOWED_ORIGINS: "${CORS_ORIGINS}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-service-config
+  namespace: circleguard-stage
+data:
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  JWT_EXPIRATION_MS: "3600000"
+  QR_EXPIRATION_SECONDS: "300"
+  SERVER_PORT: "8087"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: form-service-config
+  namespace: circleguard-stage
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_form"
+  DB_USERNAME: "admin"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  SERVER_PORT: "8086"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: circleguard-stage
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  MAIL_HOST: "${MAIL_HOST}"
+  MAIL_PORT: "${MAIL_PORT}"
+  AUTH_SERVICE_URL: "http://auth-service:8180"
+  IDENTITY_SERVICE_URL: "http://identity-service:8083"
+  JWT_EXPIRATION_MS: "3600000"
+  QR_EXPIRATION_SECONDS: "300"
+  SERVER_PORT: "8082"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promotion-service-config
+  namespace: circleguard-stage
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_promotion"
+  DB_USERNAME: "admin"
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USERNAME: "neo4j"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  JWT_EXPIRATION_MS: "3600000"
+  SERVER_PORT: "8088"
+  CORS_ALLOWED_ORIGINS: "${CORS_ORIGINS}"
+  ENCOUNTER_WINDOW_DAYS: "14"
+  MANDATORY_FENCE_DAYS: "14"
+  AUTO_THRESHOLD_SECONDS: "3600"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-service-config
+  namespace: circleguard-stage
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_dashboard"
+  DB_USERNAME: "admin"
+  PROMOTION_SERVICE_URL: "http://promotion-service:8088"
+  K_ANONYMITY_THRESHOLD: "5"
+  SERVER_PORT: "8084"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: file-service-config
+  namespace: circleguard-stage
+data:
+  SERVER_PORT: "8085"
+  FILE_UPLOAD_DIR: "uploads"

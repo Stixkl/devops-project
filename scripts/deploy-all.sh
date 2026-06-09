@@ -35,8 +35,17 @@ kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f 
 echo "     [OK] Namespace creado"
 echo ""
 
+# Deploy ConfigMaps y Secrets
+echo "[4/8] Desplegando ConfigMaps y Secrets..."
+for f in k8s/dev/configmap-*.yaml; do
+    kubectl apply -f "$f" -n $NAMESPACE
+done
+kubectl apply -f k8s/dev/secrets.yaml -n $NAMESPACE
+echo "     [OK] ConfigMaps y Secrets desplegados"
+echo ""
+
 # Deploy Infraestructura
-echo "[4/7] Desplegando infraestructura..."
+echo "[5/8] Desplegando infraestructura..."
 kubectl apply -f k8s/dev/postgres.yaml -n $NAMESPACE
 kubectl apply -f k8s/dev/redis.yaml -n $NAMESPACE
 kubectl apply -f k8s/dev/zookeeper.yaml -n $NAMESPACE
@@ -50,21 +59,21 @@ echo "     Esperando que la infraestructura este lista (2 min)..."
 sleep 120
 
 # Deploy Microservicios
-echo "[5/7] Desplegando microservicios..."
-for service in auth identity gateway form notification promotion; do
+echo "[6/8] Desplegando microservicios..."
+for service in auth identity gateway form notification promotion dashboard file; do
     echo "     Deploying ${service}-service..."
-    kubectl apply -f k8s/dev/deployment-${service}-service.yaml -n $NAMESPACE
-    kubectl apply -f k8s/dev/service-${service}-service.yaml -n $NAMESPACE
+    kubectl apply -f "k8s/dev/deployment-${service}-service.yaml" -n $NAMESPACE
+    kubectl apply -f "k8s/dev/service-${service}-service.yaml" -n $NAMESPACE
 done
 echo "     [OK] Microservicios desplegados"
 echo ""
 
 # Esperar que los pods esten listos
-echo "[6/7] Esperando que los pods esten listos (3 min)..."
+echo "[7/8] Esperando que los pods esten listos (3 min)..."
 sleep 180
 
 # Verificar estado
-echo "[7/7] Verificando estado..."
+echo "[8/8] Verificando estado..."
 echo ""
 kubectl get pods -n $NAMESPACE
 

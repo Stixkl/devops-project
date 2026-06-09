@@ -66,10 +66,23 @@ pipeline {
         }
 
         stage('Deploy to Production K8s') {
+            environment {
+                DB_PASSWORD = credentials('prod-db-password')
+                DB_URL = credentials('prod-db-url')
+                JWT_SECRET = credentials('prod-jwt-secret')
+                QR_SECRET = credentials('prod-qr-secret')
+                VAULT_SECRET = credentials('prod-vault-secret')
+                TWILIO_ACCOUNT_SID = credentials('prod-twilio-sid')
+                TWILIO_AUTH_TOKEN = credentials('prod-twilio-token')
+                GOTIFY_TOKEN = credentials('prod-gotify-token')
+            }
             steps {
                 sh """
                     kubectl config use-context docker-desktop || true
                     kubectl apply -f k8s/namespaces/ -n circleguard-master 2>/dev/null || true
+                    # Substituir placeholders en configmaps y secrets antes de aplicar
+                    envsubst < k8s/master/configmaps.yaml | kubectl apply -f - -n circleguard-master || true
+                    envsubst < k8s/master/secrets.yaml | kubectl apply -f - -n circleguard-master || true
                     kubectl apply -f k8s/master/ 2>/dev/null || true
                     kubectl set image deployment/\${SERVICE_NAME}-service \
                         \${SERVICE_NAME}-service=\${DOCKER_IMAGE}:\${RELEASE_VERSION} \

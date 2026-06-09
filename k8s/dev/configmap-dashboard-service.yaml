@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-service-config
+  namespace: circleguard-dev
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/circleguard_dashboard"
+  DB_USERNAME: "admin"
+  PROMOTION_SERVICE_URL: "http://promotion-service:8088"
+  K_ANONYMITY_THRESHOLD: "5"
+  SERVER_PORT: "8084"

@@ -1,5 +1,6 @@
 package com.circleguard.file.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
@@ -8,9 +9,10 @@ import java.util.UUID;
 
 @Service
 public class FileStorageService {
-    private final Path root = Paths.get("uploads");
+    private final Path root;
 
-    public FileStorageService() {
+    public FileStorageService(@Value("${FILE_UPLOAD_DIR:uploads}") String uploadDir) {
+        this.root = Paths.get(uploadDir);
         try {
             Files.createDirectories(root);
         } catch (IOException e) {
@@ -29,8 +31,7 @@ public class FileStorageService {
     }
 
     public Resource loadFile(String filename) {
-        // Implement retrieval logic
-        return null; 
+        return null;
     }
 }
 interface Resource {}

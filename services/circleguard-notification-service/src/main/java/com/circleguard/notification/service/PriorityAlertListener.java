@@ -21,7 +21,7 @@ public class PriorityAlertListener {
     private final TemplateService templateService;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${auth.api.url:http://circleguard-auth-service:8080}")
+    @Value("${auth.api.url:http://localhost:8180}")
     private String authApiUrl;
 
     @KafkaListener(topics = "alert.priority", groupId = "notification-priority-group")

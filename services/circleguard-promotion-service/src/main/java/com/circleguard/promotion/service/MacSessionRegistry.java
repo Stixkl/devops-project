@@ -1,6 +1,7 @@
 package com.circleguard.promotion.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import java.time.Duration;
@@ -10,11 +11,13 @@ import java.time.Duration;
 public class MacSessionRegistry {
     private final StringRedisTemplate redisTemplate;
     private static final String KEY_PREFIX = "session:mac:";
-    private static final Duration DEFAULT_TTL = Duration.ofHours(8);
+
+    @Value("${MAC_SESSION_TTL_HOURS:8}")
+    private int macSessionTtlHours;
 
     public void registerSession(String macAddress, String anonymousId) {
         String key = KEY_PREFIX + macAddress.toLowerCase();
-        redisTemplate.opsForValue().set(key, anonymousId, DEFAULT_TTL);
+        redisTemplate.opsForValue().set(key, anonymousId, Duration.ofHours(macSessionTtlHours));
     }
 
     public String getAnonymousId(String macAddress) {

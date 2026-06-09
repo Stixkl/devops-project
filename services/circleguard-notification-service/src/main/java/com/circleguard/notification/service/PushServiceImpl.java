@@ -46,7 +46,7 @@ public class PushServiceImpl implements PushService {
     )
     public CompletableFuture<Void> sendAsync(String userId, String message, Map<String, String> metadata) {
         String correlationId = java.util.UUID.randomUUID().toString();
-        if (gotifyToken.equals("MOCK_TOKEN")) {
+        if (gotifyToken.toUpperCase().contains("MOCK")) {
             log.info("[MOCK PUSH] To: {}, Content: {}, Metadata: {}", userId, message, metadata);
             auditLogService.logDelivery(userId, "PUSH", "SUCCESS", correlationId);
             return CompletableFuture.completedFuture(null);

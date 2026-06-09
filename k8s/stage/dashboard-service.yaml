@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-service
+  namespace: circleguard-stage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dashboard-service
+  template:
+    metadata:
+      labels:
+        app: dashboard-service
+    spec:
+      containers:
+      - name: dashboard-service
+        image: circleguard/dashboard-service:stage-${BUILD_NUMBER}
+        ports:
+        - containerPort: 8084
+        envFrom:
+        - configMapRef:
+            name: dashboard-service-config
+        - secretRef:
+            name: circleguard-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8084
+          initialDelaySeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8084
+          initialDelaySeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+  namespace: circleguard-stage
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8084
+    targetPort: 8084
+  selector:
+    app: dashboard-service

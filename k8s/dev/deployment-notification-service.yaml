@@ -18,15 +18,11 @@ spec:
         image: juanamor8/circleguard-notification-service:latest
         ports:
         - containerPort: 8082
-        env:
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
-        - name: SPRING_MAIL_HOST
-          value: "mailhog"
-        - name: SPRING_MAIL_PORT
-          value: "1025"
-        - name: AUTH_API_URL
-          value: "http://auth-service:8180"
+        envFrom:
+        - configMapRef:
+            name: notification-service-config
+        - secretRef:
+            name: circleguard-secrets
         resources:
           requests:
             memory: "256Mi"

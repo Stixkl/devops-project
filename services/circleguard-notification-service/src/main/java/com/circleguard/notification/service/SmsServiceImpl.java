@@ -18,7 +18,7 @@ public class SmsServiceImpl implements SmsService {
     @Value("${twilio.account-sid:AC_MOCK_SID}")
     private String accountSid;
 
-    @Value("${twilio.auth-token:MOCK_TOKEN}")
+    @Value("${twilio.auth-token:mock-token}")
     private String authToken;
 
     @Value("${twilio.from-number:+15550000000}")
@@ -51,11 +51,9 @@ public class SmsServiceImpl implements SmsService {
 
         try {
             log.debug("Attempting to send SMS to user: {}", userId);
-            // Mocking phone number lookup
-            String toPhone = "+15551112222"; 
             
             Message.creator(
-                new PhoneNumber(toPhone),
+                new PhoneNumber(userId),
                 new PhoneNumber(fromNumber),
                 messageContent
             ).create();
