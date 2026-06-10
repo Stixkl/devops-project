@@ -1,0 +1,26 @@
+# Experimento 1 — Pod kill de la dependencia (promotion-service)
+#
+# Hipótesis: al matar el pod de promotion-service, el circuit breaker
+# `promotionService` del dashboard abre tras los fallos acumulados y el
+# fallback devuelve el último resultado bueno cacheado (Caffeine,
+# `"cached": true`) en vez de propagar 5xx al usuario.
+#
+# Blast radius: solo el pod promotion-service del ns circleguard-chaos.
+#
+# Verificación:
+#   antes : curl dashboard:8084/api/v1/analytics/summary  → datos del stub
+#   durante: mismo curl → respuesta con "cached": true (fallback)
+#            curl dashboard:8084/actuator/prometheus | grep circuitbreaker_state
+#   después: pod recreado por el Deployment → breaker half-open → closed
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-promotion
+  namespace: circleguard-chaos
+spec:
+  action: pod-kill
+  mode: all
+  selector:
+    namespaces: [circleguard-chaos]
+    labelSelectors:
+      app: promotion-service

@@ -1,0 +1,141 @@
+# Entorno objetivo de los experimentos de caos.
+# dashboard-service REAL (imagen local circleguard/dashboard-service:chaos)
+# con su circuit breaker resilience4j apuntando a un stub de promotion-service
+# (nginx devolviendo el JSON de /api/v1/health-status/stats). El caos se
+# inyecta sobre el stub (dependencia) y sobre el propio dashboard.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-chaos
+---
+# --- PostgreSQL (dependencia de datos del dashboard) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: circleguard-chaos
+  labels: { app: postgres }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - { name: POSTGRES_DB, value: circleguard_dashboard }
+            - { name: POSTGRES_USER, value: admin }
+            - { name: POSTGRES_PASSWORD, value: password }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "admin"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: circleguard-chaos
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+# --- Stub de promotion-service (nginx con respuestas JSON) ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promotion-stub-conf
+  namespace: circleguard-chaos
+data:
+  default.conf: |
+    server {
+      listen 8088;
+      default_type application/json;
+      location /api/v1/health-status/stats {
+        return 200 '{"activeCount":5000,"suspectCount":30,"probableCount":15,"confirmedCount":5,"source":"promotion-stub"}';
+      }
+      location /actuator/health {
+        return 200 '{"status":"UP"}';
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: promotion-service
+  namespace: circleguard-chaos
+  labels: { app: promotion-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: promotion-service } }
+  template:
+    metadata: { labels: { app: promotion-service } }
+    spec:
+      containers:
+        - name: promotion-stub
+          image: nginx:1.27-alpine
+          ports: [{ containerPort: 8088 }]
+          volumeMounts:
+            - { name: conf, mountPath: /etc/nginx/conf.d }
+      volumes:
+        - name: conf
+          configMap: { name: promotion-stub-conf }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: promotion-service
+  namespace: circleguard-chaos
+spec:
+  selector: { app: promotion-service }
+  ports: [{ port: 8088, targetPort: 8088 }]
+---
+# --- dashboard-service real (circuit breaker resilience4j) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-service
+  namespace: circleguard-chaos
+  labels: { app: dashboard-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: dashboard-service } }
+  template:
+    metadata: { labels: { app: dashboard-service } }
+    spec:
+      containers:
+        - name: dashboard-service
+          image: circleguard/dashboard-service:chaos
+          imagePullPolicy: Never
+          ports: [{ containerPort: 8084 }]
+          env:
+            - { name: DB_URL, value: "jdbc:postgresql://postgres:5432/circleguard_dashboard" }
+            - { name: DB_USERNAME, value: admin }
+            - { name: DB_PASSWORD, value: password }
+            - { name: CIRCLEGUARD_CLIENT_PROMOTION_URL, value: "http://promotion-service:8088" }
+            - { name: TRACING_SAMPLING_PROBABILITY, value: "0.0" }
+          resources:
+            requests: { memory: "384Mi", cpu: "250m" }
+            limits: { memory: "768Mi", cpu: "1" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8084 }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8084 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+  namespace: circleguard-chaos
+spec:
+  selector: { app: dashboard-service }
+  ports: [{ port: 8084, targetPort: 8084 }]

@@ -1,0 +1,30 @@
+# Experimento 2 — Latencia de red hacia la dependencia (promotion-service)
+#
+# Hipótesis: con 5s de delay (read-timeout del cliente = 5s), las llamadas
+# del dashboard a promotion se vuelven "slow calls"/timeouts; el breaker
+# abre por slow-call-rate-threshold=100% / ResourceAccessException sin que
+# el pod muera. La latencia NO se propaga al usuario: el fallback responde
+# rápido con caché.
+#
+# Blast radius: tráfico de red del pod promotion-service durante 2 min.
+#
+# Verificación:
+#   durante: time curl dashboard:8084/api/v1/analytics/summary → <1s con
+#            "cached": true (sin el breaker tardaría >5s o daría 500)
+#   después: el delay expira (duration) y el breaker se cierra solo.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-promotion
+  namespace: circleguard-chaos
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [circleguard-chaos]
+    labelSelectors:
+      app: promotion-service
+  delay:
+    latency: "5s"
+    jitter: "500ms"
+  duration: "2m"

@@ -1,0 +1,27 @@
+# Experimento 3 — Fallo del propio servicio (dashboard-service)
+#
+# Hipótesis: con el contenedor en fallo 60s, la liveness probe
+# (/actuator/health/liveness, failureThreshold=3 × 10s) detecta el problema
+# y Kubernetes reinicia el contenedor; la readiness lo saca del Service
+# mientras tanto (los clientes no reciben tráfico a un pod muerto).
+# Auto-recuperación sin intervención humana.
+#
+# Blast radius: pod dashboard-service durante 60s.
+#
+# Verificación:
+#   durante: kubectl get pods -n circleguard-chaos -w → READY 0/1, luego
+#            RESTARTS +1; kubectl get endpoints dashboard-service → vacío
+#   después: pod READY 1/1 de nuevo, curl al summary responde.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-dashboard
+  namespace: circleguard-chaos
+spec:
+  action: pod-failure
+  mode: one
+  selector:
+    namespaces: [circleguard-chaos]
+    labelSelectors:
+      app: dashboard-service
+  duration: "60s"

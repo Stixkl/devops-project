@@ -1,0 +1,31 @@
+# Experimento 4 — Presión de memoria en dashboard-service
+#
+# Hipótesis: con 256MiB extra de presión dentro del contenedor (límite
+# 768Mi), la JVM sube su heap usado; la métrica jvm_memory_used_bytes lo
+# refleja (alerta HighJVMMemory >85% en
+# k8s/master/observability/prometheusrule-alertas.yaml) pero el límite de
+# memoria del Deployment evita afectar a otros pods del nodo, y no hay
+# OOMKill porque límite > heap máximo + presión.
+#
+# Blast radius: pod dashboard-service durante 2 min.
+#
+# Verificación:
+#   durante: curl dashboard:8084/actuator/prometheus | grep jvm_memory_used
+#            kubectl top pod -n circleguard-chaos (memoria sube)
+#   después: presión liberada, sin reinicios (RESTARTS no incrementa).
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: stress-memory-dashboard
+  namespace: circleguard-chaos
+spec:
+  mode: one
+  selector:
+    namespaces: [circleguard-chaos]
+    labelSelectors:
+      app: dashboard-service
+  stressors:
+    memory:
+      workers: 1
+      size: "256MB"
+  duration: "2m"

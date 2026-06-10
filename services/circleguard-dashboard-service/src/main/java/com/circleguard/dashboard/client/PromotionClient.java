@@ -26,7 +26,11 @@ public class PromotionClient {
     private final RestTemplate restTemplate;
     private final String promotionServiceUrl;
     private final DashboardMetrics dashboardMetrics;
-    private final Cache<String, Map> lastSuccessCache = Caffeine.newBuilder()
+    // static: el fallback de resilience4j se invoca sobre el proxy CGLIB, cuyos
+    // campos de instancia no se inicializan (objenesis). Con un campo de
+    // instancia la caché era siempre null dentro del fallback y nunca se
+    // devolvían datos cacheados (hallazgo del experimento de caos 01).
+    private static final Cache<String, Map> lastSuccessCache = Caffeine.newBuilder()
             .expireAfterWrite(30, TimeUnit.MINUTES)
             .maximumSize(100)
             .build();
