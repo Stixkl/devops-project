@@ -60,10 +60,13 @@ kind: Service
 metadata:
   name: form-service
   namespace: circleguard-master
+  labels:
+    app: form-service
 spec:
   type: ClusterIP
   ports:
-  - port: 8086
+  - name: http
+    port: 8086
     targetPort: 8086
   selector:
     app: form-service

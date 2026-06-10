@@ -65,10 +65,13 @@ kind: Service
 metadata:
   name: dashboard-service
   namespace: circleguard-master
+  labels:
+    app: dashboard-service
 spec:
   type: LoadBalancer
   ports:
-  - port: 8084
+  - name: http
+    port: 8084
     targetPort: 8084
     protocol: TCP
   selector:

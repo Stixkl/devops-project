@@ -37,7 +37,7 @@ Git Repository
 | Stage | Descripción |
 |-------|-------------|
 | Checkout | Descarga código fuente |
-| Build & Compile | `./gradlew compileKotlin compileTestKotlin` |
+| Build & Compile | `./gradlew :services:circleguard-<svc>-service:build -x test` |
 | Unit Tests | `./gradlew test` + JUnit reports |
 | Security Scan | OWASP Dependency Check |
 | Docker Build | Construye imagen con Dockerfile.<service> |

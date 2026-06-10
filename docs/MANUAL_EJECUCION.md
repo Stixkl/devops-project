@@ -10,12 +10,12 @@ Antes de comenzar, verifica que todo está en su lugar:
 
 ```powershell
 # Verificar estructura
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\docker
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\jenkins
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\k8s
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\tests
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\scripts
-Get-ChildItem C:\Users\juanc\Videos\circle-guard-public\docs
+Get-ChildItem C:\Users\juanc\Videos\devops-project\docker
+Get-ChildItem C:\Users\juanc\Videos\devops-project\jenkins
+Get-ChildItem C:\Users\juanc\Videos\devops-project\k8s
+Get-ChildItem C:\Users\juanc\Videos\devops-project\tests
+Get-ChildItem C:\Users\juanc\Videos\devops-project\scripts
+Get-ChildItem C:\Users\juanc\Videos\devops-project\docs
 ```
 
 Debes ver:
@@ -102,7 +102,7 @@ Para **cada servicio**, crea un nuevo item:
 1. **New Item** → nombre: `circleguard-auth-service-dev`
 2. Tipo: **Multibranch Pipeline**
 3. Branch Sources → **Add source** → Git:
-    - Repository URL: `https://github.com/JuanAmor8/circle-guard-public.git`
+    - Repository URL: `https://github.com/JuanAmor8/devops-project.git`
     - Credentials: (tu token GitHub o anonymous)
 4. Build Configuration → Mode: **by Jenkinsfile**
    - Script Path: `jenkins/Jenkinsfile-dev`
@@ -119,7 +119,7 @@ Para **cada servicio**, crea un nuevo item:
 ## B3. CONSTRUIR IMÁGENES DOCKER LOCALMENTE
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public
+cd C:\Users\Administrator\Videos\devops-project
 
 # Verificar docker-compose
 docker compose -f docker/docker-compose.yml config
@@ -138,7 +138,7 @@ docker images | Select-String circleguard
 ## B4. DESPLEGAR A KUBERNETES
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public
+cd C:\Users\Administrator\Videos\devops-project
 
 # 1. Crear namespaces
 kubectl apply -f k8s/namespaces/
@@ -169,7 +169,7 @@ kubectl logs -n circleguard-dev deployment/auth-service --tail=50
 ### Unit Tests (desde la raíz del proyecto)
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public
+cd C:\Users\Administrator\Videos\devops-project
 
 # Ejecutar tests de un servicio específico
 .\gradlew :services:circleguard-auth-service:test
@@ -186,7 +186,7 @@ cd C:\Users\Administrator\Videos\circle-guard-public
 ### Integration Tests
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public
+cd C:\Users\Administrator\Videos\devops-project
 
 # Ejecutar módulo de integración
 .\gradlew :tests:integration-tests:test
@@ -198,7 +198,7 @@ cd C:\Users\Administrator\Videos\circle-guard-public
 ### E2E Tests (requiere que los servicios estén corriendo)
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public\tests\e2e
+cd C:\Users\Administrator\Videos\devops-project\tests\e2e
 
 # Instalar Cypress
 npm install
@@ -213,7 +213,7 @@ npx cypress open
 ### Performance Tests (requiere que los servicios estén corriendo)
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public\tests\performance
+cd C:\Users\Administrator\Videos\devops-project\tests\performance
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -231,7 +231,7 @@ locust -f locust_stress_test.py --headless -u 500 -r 50 -t 5m --host http://loca
 
 ```powershell
 # Crear carpeta para screenshots
-New-Item -ItemType Directory -Force -Path C:\Users\Administrator\Videos\circle-guard-public\docs\screenshots
+New-Item -ItemType Directory -Force -Path C:\Users\Administrator\Videos\devops-project\docs\screenshots
 
 # Capturas necesarias:
 # 1. Jenkins - Jobs Multibranch Pipeline
@@ -270,7 +270,7 @@ Estructura del video (≤8 minutos):
 ## B8. EMPAQUETAR ENTREGA
 
 ```powershell
-cd C:\Users\Administrator\Videos\circle-guard-public
+cd C:\Users\Administrator\Videos\devops-project
 
 # Crear ZIP con todos los artefactos
 Compress-Archive -Path docker,jenkins,k8s,tests,scripts,docs -DestinationPath circleguard-taller2-entrega.zip -Force

@@ -59,10 +59,13 @@ kind: Service
 metadata:
   name: notification-service
   namespace: circleguard-master
+  labels:
+    app: notification-service
 spec:
   type: ClusterIP
   ports:
-  - port: 8082
+  - name: http
+    port: 8082
     targetPort: 8082
   selector:
     app: notification-service

@@ -80,10 +80,13 @@ kind: Service
 metadata:
   name: auth-service
   namespace: circleguard-master
+  labels:
+    app: auth-service
 spec:
   type: LoadBalancer
   ports:
-  - port: 8180
+  - name: http
+    port: 8180
     targetPort: 8180
     protocol: TCP
   selector:

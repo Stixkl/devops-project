@@ -60,10 +60,13 @@ kind: Service
 metadata:
   name: identity-service
   namespace: circleguard-master
+  labels:
+    app: identity-service
 spec:
   type: ClusterIP
   ports:
-  - port: 8083
+  - name: http
+    port: 8083
     targetPort: 8083
   selector:
     app: identity-service
