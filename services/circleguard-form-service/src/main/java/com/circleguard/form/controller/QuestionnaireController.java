@@ -1,6 +1,7 @@
 package com.circleguard.form.controller;
 
 import com.circleguard.form.model.Questionnaire;
+import com.circleguard.form.observability.FormMetrics;
 import com.circleguard.form.service.QuestionnaireService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class QuestionnaireController {
     private final QuestionnaireService service;
+    private final FormMetrics formMetrics;
 
     @GetMapping
     public ResponseEntity<List<Questionnaire>> getAll() {
@@ -35,6 +37,7 @@ public class QuestionnaireController {
 
     @PostMapping("/{id}/activate")
     public ResponseEntity<Void> activate(@PathVariable UUID id) {
+        formMetrics.setActiveQuestionnaires(1);
         service.activateQuestionnaire(id);
         return ResponseEntity.ok().build();
     }

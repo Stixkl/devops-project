@@ -1,6 +1,7 @@
 package com.circleguard.form.controller;
 
 import com.circleguard.form.model.ValidationStatus;
+import com.circleguard.form.observability.FormMetrics;
 import com.circleguard.form.service.HealthSurveyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import java.util.UUID;
 public class CertificateValidationController {
 
     private final HealthSurveyService surveyService;
+    private final FormMetrics formMetrics;
 
     @GetMapping("/pending")
     public ResponseEntity<?> getPending() {
@@ -26,6 +28,7 @@ public class CertificateValidationController {
             @PathVariable UUID id,
             @RequestParam ValidationStatus status,
             @RequestParam UUID adminId) {
+        formMetrics.recordCertificateValidated();
         surveyService.validateSurvey(id, status, adminId);
         return ResponseEntity.ok().build();
     }
