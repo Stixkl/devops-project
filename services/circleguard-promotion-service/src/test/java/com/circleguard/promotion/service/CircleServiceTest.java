@@ -9,9 +9,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
-import java.util.UUID;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -22,53 +22,48 @@ class CircleServiceTest {
     @Mock
     private CircleNodeRepository circleNodeRepository;
 
+    @Mock
+    private HealthStatusService healthStatusService;
+
     @InjectMocks
     private CircleService circleService;
 
     @Test
-    @DisplayName("Should find circles by location ID")
-    void findByLocationId_ReturnsCircles() {
+    @DisplayName("Should toggle circle validity")
+    void toggleCircleValidity_FlipsIsValid() {
+        Long circleId = 1L;
+        CircleNode circle = CircleNode.builder()
+                .id(circleId)
+                .name("Test Circle")
+                .isValid(true)
+                .members(new HashSet<>())
+                .build();
+
+        when(circleNodeRepository.findById(circleId)).thenReturn(Optional.of(circle));
+        when(circleNodeRepository.save(any())).thenReturn(circle);
+
+        circleService.toggleCircleValidity(circleId);
+
+        assertFalse(circle.getIsValid());
+        verify(circleNodeRepository).save(circle);
+    }
+
+    @Test
+    @DisplayName("Should create a new circle")
+    void createCircle_ReturnsSavedCircle() {
+        String name = "Team Alpha";
         String locationId = "building-A-floor-2";
-        CircleNode circle = new CircleNode();
-        circle.setId(UUID.randomUUID().toString());
-        circle.setName("Team Alpha");
-        circle.setLocationId(locationId);
 
-        when(circleNodeRepository.findByLocationId(locationId)).thenReturn(List.of(circle));
+        when(circleNodeRepository.existsByInviteCode(anyString())).thenReturn(false);
+        when(circleNodeRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = circleService.findByLocationId(locationId);
+        CircleNode result = circleService.createCircle(name, locationId);
 
         assertNotNull(result);
-        assertEquals(1, result.size());
-        verify(circleNodeRepository, times(1)).findByLocationId(locationId);
-    }
-
-    @Test
-    @DisplayName("Should return empty list when no circles found")
-    void findByLocationId_NoCircles_ReturnsEmptyList() {
-        String locationId = "unknown-location";
-
-        when(circleNodeRepository.findByLocationId(locationId)).thenReturn(List.of());
-
-        var result = circleService.findByLocationId(locationId);
-
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    @DisplayName("Should check if circle is active")
-    void isActiveCircle_WithValidCircle_ReturnsTrue() {
-        CircleNode circle = new CircleNode();
-        circle.setId(UUID.randomUUID().toString());
-        circle.setName("Active Circle");
-        circle.setActive(true);
-
-        when(circleNodeRepository.findById(circle.getId()))
-                .thenReturn(Optional.of(circle));
-
-        boolean result = circleService.isActiveCircle(circle.getId());
-
-        assertTrue(result);
+        assertEquals(name, result.getName());
+        assertEquals(locationId, result.getLocationId());
+        assertTrue(result.getIsActive());
+        assertTrue(result.getInviteCode().startsWith("MESH-"));
+        verify(circleNodeRepository).save(any());
     }
 }

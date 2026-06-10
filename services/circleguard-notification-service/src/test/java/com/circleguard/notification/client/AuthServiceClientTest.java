@@ -2,18 +2,21 @@ package com.circleguard.notification.client;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
+import org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JAutoConfiguration;
-import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(classes = {AuthServiceClient.class, AuthServiceClientTest.TestConfig.class})
+@SpringBootTest(classes = AuthServiceClient.class)
+@EnableAutoConfiguration(exclude = {
+    KafkaAutoConfiguration.class,
+    MailSenderAutoConfiguration.class
+})
 @TestPropertySource(properties = {
     "circleguard.client.auth-service.url=http://localhost:1180",
     "circleguard.client.auth-service.connect-timeout=100",
@@ -26,12 +29,6 @@ class AuthServiceClientTest {
 
     @Autowired
     private AuthServiceClient authServiceClient;
-
-    @Configuration
-    @EnableCircuitBreaker
-    @ImportAutoConfiguration(Resilience4JAutoConfiguration.class)
-    static class TestConfig {
-    }
 
     @Test
     void fallbackShouldReturnBroadcastAllAfterCircuitOpens() {

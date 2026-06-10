@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -19,6 +20,9 @@ import com.circleguard.identity.config.SecurityConfig;
 
 @WebMvcTest(IdentityVaultController.class)
 @Import(SecurityConfig.class)
+@TestPropertySource(properties = {
+    "jwt.secret=ThisIsA256BitLongSecretKeyForHMACSHAAlgorithm!!!"
+})
 class IdentityVaultControllerTest {
 
     @Autowired

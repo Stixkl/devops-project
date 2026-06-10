@@ -24,7 +24,10 @@ public class PromotionClient {
 
     private final RestTemplate restTemplate;
     private final String promotionServiceUrl;
-    private final Cache<String, Map> lastSuccessCache;
+    private final Cache<String, Map> lastSuccessCache = Caffeine.newBuilder()
+            .expireAfterWrite(30, TimeUnit.MINUTES)
+            .maximumSize(100)
+            .build();
 
     public PromotionClient(
             @Value("${circleguard.client.promotion-service.url:http://localhost:8088}")
@@ -40,14 +43,10 @@ public class PromotionClient {
                 .setConnectTimeout(Duration.ofMillis(connectTimeout))
                 .setReadTimeout(Duration.ofMillis(Math.max(readTimeout, writeTimeout)))
                 .build();
-        this.lastSuccessCache = Caffeine.newBuilder()
-                .expireAfterWrite(30, TimeUnit.MINUTES)
-                .maximumSize(100)
-                .build();
     }
 
     @SuppressWarnings("unchecked")
-    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackStats")
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackGetHealthStats")
     public Map<String, Object> getHealthStats() {
         Map result = restTemplate.getForObject(
                 promotionServiceUrl + "/api/v1/health-status/stats",
@@ -60,7 +59,7 @@ public class PromotionClient {
     }
 
     @SuppressWarnings("unchecked")
-    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackStats")
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackGetHealthStatsByDepartment")
     public Map<String, Object> getHealthStatsByDepartment(String department) {
         Map result = restTemplate.getForObject(
                 promotionServiceUrl + "/api/v1/health-status/stats/department/" + department,
@@ -72,23 +71,25 @@ public class PromotionClient {
         return result;
     }
 
-    private Map<String, Object> fallbackStats(String department, Throwable t) {
+    private Map<String, Object> fallbackGetHealthStatsByDepartment(String department, Throwable t) {
         String cacheKey = department != null
                 ? CACHE_KEY_DEPT_PREFIX + department
                 : CACHE_KEY_GLOBAL;
-        Map cached = lastSuccessCache.getIfPresent(cacheKey);
-        if (cached != null) {
-            log.warn("Promotion service unavailable. Returning cached data for key: {}", cacheKey);
-            Map<String, Object> result = new HashMap<>(cached);
-            result.put("cached", true);
-            result.put("cached_at", Instant.now().toString());
-            return Map.copyOf(result);
+        if (lastSuccessCache != null) {
+            Map cached = lastSuccessCache.getIfPresent(cacheKey);
+            if (cached != null) {
+                log.warn("Promotion service unavailable. Returning cached data for key: {}", cacheKey);
+                Map<String, Object> result = new HashMap<>(cached);
+                result.put("cached", true);
+                result.put("cached_at", Instant.now().toString());
+                return Map.copyOf(result);
+            }
         }
         log.warn("Promotion service unavailable. No cached data for key: {}", cacheKey);
         return Map.of("error", "Service unavailable", "cached", false);
     }
 
-    private Map<String, Object> fallbackStats(Throwable t) {
-        return fallbackStats(null, t);
+    private Map<String, Object> fallbackGetHealthStats(Throwable t) {
+        return fallbackGetHealthStatsByDepartment(null, t);
     }
 }
