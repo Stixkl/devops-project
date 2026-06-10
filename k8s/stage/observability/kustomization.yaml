@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../master/observability/namespace.yaml
+  - ../../master/observability/rbac.yaml
+  - ../../master/observability/elasticsearch.yaml
+  - ../../master/observability/kibana.yaml
+  - ../../master/observability/filebeat.yaml
+  - ../../master/observability/jaeger.yaml
+  - ../../master/observability/exporter-postgresql.yaml
+  - ../../master/observability/exporter-kafka.yaml
+  - ../../master/observability/exporter-redis.yaml
+  - ../../master/observability/exporter-neo4j.yaml
+  - ../../master/observability/exporter-zookeeper.yaml
+  - ../../master/observability/servicemonitor-auth-service.yaml
+  - ../../master/observability/servicemonitor-identity-service.yaml
+  - ../../master/observability/servicemonitor-gateway-service.yaml
+  - ../../master/observability/servicemonitor-form-service.yaml
+  - ../../master/observability/servicemonitor-notification-service.yaml
+  - ../../master/observability/servicemonitor-promotion-service.yaml
+  - ../../master/observability/servicemonitor-dashboard-service.yaml
+  - ../../master/observability/servicemonitor-file-service.yaml
+  - ../../master/observability/prometheusrule-alertas.yaml
+  - ../../master/observability/grafana-dashboards-configmap.yaml
+patches:
+  - target:
+      kind: ServiceMonitor
+    patch: |-
+      - op: replace
+        path: /spec/endpoints/0/interval
+        value: 30s
+  - target:
+      kind: Elasticsearch
+    patch: |-
+      - op: replace
+        path: /spec/nodeSets/0/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 10Gi

@@ -1,0 +1,333 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: circleguard-grafana-dashboards
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  service-overview.json: |
+    {
+      "title": "CircleGuard - Service Overview",
+      "uid": "circleguard-service-overview",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "HTTP Request Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(http_server_requests_seconds_count{application=~\"circleguard-.*\"}[5m])",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Error Rate (5xx)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(http_server_requests_seconds_count{status=~\"5..\",application=~\"circleguard-.*\"}[5m])",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "P99 Latency",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{application=~\"circleguard-.*\"}[5m]))",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "JVM Heap Usage",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {
+              "expr": "jvm_memory_used_bytes{area=\"heap\",application=~\"circleguard-.*\"}",
+              "legendFormat": "{{application}} - used"
+            },
+            {
+              "expr": "jvm_memory_max_bytes{area=\"heap\",application=~\"circleguard-.*\"}",
+              "legendFormat": "{{application}} - max"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "CPU Usage",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [
+            {
+              "expr": "process_cpu_usage{application=~\"circleguard-.*\"}",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        }
+      ]
+    }
+  business-metrics.json: |
+    {
+      "title": "CircleGuard - Business Metrics",
+      "uid": "circleguard-business-metrics",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Logins (total vs failed)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "rate(auth_logins_total[5m])", "legendFormat": "success"},
+            {"expr": "rate(auth_logins_failed[5m])", "legendFormat": "failed"},
+            {"expr": "rate(auth_logins_degraded[5m])", "legendFormat": "degraded"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Surveys Submitted",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "rate(form_surveys_submitted[5m])", "legendFormat": "surveys"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Notifications",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "rate(notifications_sent_total[5m])", "legendFormat": "total"},
+            {"expr": "rate(notifications_sent_email[5m])", "legendFormat": "email"},
+            {"expr": "rate(notifications_sent_sms[5m])", "legendFormat": "sms"},
+            {"expr": "rate(notifications_sent_push[5m])", "legendFormat": "push"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Active Cases & Fencing Events",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "promotion_active_cases", "legendFormat": "active cases"},
+            {"expr": "rate(promotion_fencing_events[1h])", "legendFormat": "fencing events/h"}
+          ]
+        }
+      ]
+    }
+  circuit-breakers.json: |
+    {
+      "title": "CircleGuard - Circuit Breakers",
+      "uid": "circleguard-circuit-breakers",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Circuit Breaker State",
+          "type": "stat",
+          "gridPos": {"h": 6, "w": 4, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "resilience4j_circuitbreaker_state{state=\"closed\"}", "legendFormat": "closed"},
+            {"expr": "resilience4j_circuitbreaker_state{state=\"open\"}", "legendFormat": "open"},
+            {"expr": "resilience4j_circuitbreaker_state{state=\"half_open\"}", "legendFormat": "half-open"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Circuit Breaker Failure Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "targets": [
+            {"expr": "resilience4j_circuitbreaker_calls_failure_rate", "legendFormat": "{{name}}"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Slow Call Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+          "targets": [
+            {"expr": "resilience4j_circuitbreaker_calls_slow_call_rate", "legendFormat": "{{name}}"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Buffered Calls",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+          "targets": [
+            {"expr": "rate(resilience4j_circuitbreaker_calls_total[5m])", "legendFormat": "{{name}} - {{kind}}"}
+          ]
+        }
+      ]
+    }
+  kafka-metrics.json: |
+    {
+      "title": "CircleGuard - Kafka",
+      "uid": "circleguard-kafka-metrics",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Consumer Lag by Topic",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "kafka_consumer_lag", "legendFormat": "{{topic}} - {{partition}}"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Messages per Second",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "rate(kafka_topic_partition_current_offset[5m])", "legendFormat": "{{topic}} - {{partition}}"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Producer Request Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "rate(kafka_producer_request_rate[5m])", "legendFormat": "{{client}}"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Consumer Group Lag",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "kafka_consumergroup_lag", "legendFormat": "{{consumergroup}} - {{topic}}"}
+          ]
+        }
+      ]
+    }
+  database-metrics.json: |
+    {
+      "title": "CircleGuard - Databases",
+      "uid": "circleguard-database-metrics",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "HikariCP Active Connections",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "hikaricp_connections_active", "legendFormat": "{{pool}}"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "HikariCP Connection Timeouts",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "rate(hikaricp_connections_timeout_total[5m])", "legendFormat": "{{pool}}"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Redis Cache Hit Ratio",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))", "legendFormat": "hit ratio"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Neo4j Active Transactions",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "neo4j_transactions_active", "legendFormat": "active"}
+          ]
+        }
+      ]
+    }
+  kubernetes-overview.json: |
+    {
+      "title": "CircleGuard - Kubernetes",
+      "uid": "circleguard-kubernetes-overview",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Pod Status by Namespace",
+          "type": "stat",
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "count(kube_pod_status_phase{phase=\"Running\",namespace=~\"circleguard-.*\"})", "legendFormat": "running"},
+            {"expr": "count(kube_pod_status_phase{phase=\"Pending\",namespace=~\"circleguard-.*\"})", "legendFormat": "pending"},
+            {"expr": "count(kube_pod_status_phase{phase=\"Failed\",namespace=~\"circleguard-.*\"})", "legendFormat": "failed"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Node CPU Usage",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "targets": [
+            {"expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "CPU usage"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Node Memory Usage",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+          "targets": [
+            {"expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes", "legendFormat": "memory used"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "HPA Current vs Target Replicas",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+          "targets": [
+            {"expr": "kube_horizontalpodautoscaler_spec_target_replicas", "legendFormat": "{{horizontalpodautoscaler}} - target"},
+            {"expr": "kube_horizontalpodautoscaler_status_current_replicas", "legendFormat": "{{horizontalpodautoscaler}} - current"}
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Namespace Resource Quota",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+          "targets": [
+            {"expr": "kube_resourcequota{type=\"hard\"}", "legendFormat": "{{resource}} - hard"},
+            {"expr": "kube_resourcequota{type=\"used\"}", "legendFormat": "{{resource}} - used"}
+          ]
+        }
+      ]
+    }

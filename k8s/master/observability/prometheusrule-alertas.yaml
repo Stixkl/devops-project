@@ -1,0 +1,131 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: circleguard-alerts
+  namespace: observability
+  labels:
+    release: prometheus-stack
+spec:
+  groups:
+    - name: circleguard-technical
+      interval: 30s
+      rules:
+        - alert: ServiceDown
+          expr: up{job=~"circleguard-.*"} == 0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "{{ $labels.job }} has been unreachable for more than 30s"
+
+        - alert: HighErrorRate
+          expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) / rate(http_server_requests_seconds_count[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High error rate on {{ $labels.application }}"
+            description: "Error rate {{ $value | humanizePercentage }} on {{ $labels.application }}"
+
+        - alert: HighLatency
+          expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency on {{ $labels.application }}"
+            description: "P99 latency is {{ $value }}s on {{ $labels.application }}"
+
+        - alert: CircuitBreakerOpen
+          expr: resilience4j_circuitbreaker_state{state="open"} == 1
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Circuit Breaker {{ $labels.name }} is OPEN"
+            description: "Circuit breaker {{ $labels.name }} on {{ $labels.application }} is open"
+
+        - alert: HighJVMMemory
+          expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High JVM memory on {{ $labels.application }}"
+            description: "JVM heap usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+        - alert: HighCPUSaturation
+          expr: process_cpu_usage > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU saturation on {{ $labels.application }}"
+            description: "CPU usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+        - alert: KafkaConsumerLag
+          expr: kafka_consumer_lag > 1000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High Kafka consumer lag on {{ $labels.application }}"
+            description: "Consumer lag is {{ $value }} on {{ $labels.instance }}"
+
+        - alert: DiskSpaceLow
+          expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.15
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Low disk space on {{ $labels.node }}"
+            description: "Disk usage is {{ $value | humanizePercentage }} available on {{ $labels.node }}"
+
+    - name: circleguard-business
+      interval: 30s
+      rules:
+        - alert: LoginFailureSpike
+          expr: rate(auth_logins_failed_total[5m]) > rate(auth_logins_total[5m]) * 0.3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Login failure spike detected"
+            description: "Login failure rate {{ $value }}/s exceeds 30% of total logins"
+
+        - alert: DegradedModeActive
+          expr: rate(auth_logins_degraded_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Degraded mode active"
+            description: "Auth service operating in degraded mode for more than 5 minutes"
+
+        - alert: NoSurveysSubmitted
+          expr: absent(form_surveys_submitted_total) == 1 or rate(form_surveys_submitted_total[30m]) == 0
+          for: 5m
+          labels:
+            severity: info
+          annotations:
+            summary: "No surveys submitted in 30 minutes"
+            description: "No survey submissions detected in the last 30 minutes"
+
+        - alert: NotificationBroadcast
+          expr: rate(notifications_broadcast_total[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Notifications in broadcast mode"
+            description: "Notifications being sent in broadcast mode due to auth-service unavailability"
+
+        - alert: HighFencingRate
+          expr: (rate(promotion_fencing_events_total[1h]) or vector(0)) > 3 * (rate(promotion_fencing_events_total[1h] offset 1d) or vector(0))
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High fencing event rate"
+            description: "Fencing event rate {{ $value }}/h is 3x higher than the 24h average"
