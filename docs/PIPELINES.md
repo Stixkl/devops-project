@@ -1,5 +1,21 @@
 # Pipelines CI/CD - Circle Guard
 
+## Arquitectura dual: GitHub Actions (CI) + Jenkins (CD)
+
+El proyecto usa **dos motores complementarios**, no redundantes:
+
+| Capa | Motor | Responsabilidad | Definición |
+|------|-------|-----------------|------------|
+| **CI** | GitHub Actions | Build, unit/integración, calidad (SonarQube, JaCoCo), seguridad (OWASP DC, Trivy, ZAP), performance (Locust), release notes automáticas (semantic-release), notificación de fallos (issue + Slack) | `.github/workflows/ci.yml` (12 jobs) |
+| **CD** | Jenkins | Despliegue multi-ambiente con promoción controlada dev → stage → prod, gate de aprobación manual a producción, smoke tests post-deploy, tagging de release, notificación de fallos por mail | `jenkins/Jenkinsfile-{dev,stage,master}` |
+
+Razón del diseño: Actions corre en cada push sin infraestructura propia y
+centraliza el feedback de calidad en el PR; Jenkins vive junto a los clusters
+y gobierna la promoción entre ambientes (credenciales de despliegue nunca
+salen de la red del cluster). Un fallo en CI bloquea el merge; un fallo en CD
+bloquea la promoción y dispara el plan de rollback
+(`docs/CHANGE_MANAGEMENT.md`).
+
 ## Arquitectura de Pipelines
 
 ```
