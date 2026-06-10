@@ -7,3 +7,48 @@ server:
 
 file:
   upload-dir: ${FILE_UPLOAD_DIR:uploads}
+
+logging:
+  level:
+    com.circleguard: ${LOGGING_LEVEL_CIRCLEGUARD:INFO}
+    org.springframework: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus${MANAGEMENT_ENDPOINTS_EXTRA:}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      instance: ${HOSTNAME:unknown}
+      environment: ${ENVIRONMENT:development}
+    export:
+      prometheus:
+        enabled: true
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.01}
+    propagation:
+      type: w3c
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://jaeger-collector:9411}/api/v2/spans
+  observations:
+    http:
+      server:
+        exclude-patterns: /actuator/health/**,/actuator/health
