@@ -1,3 +1,45 @@
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 4s
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        record-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      authServicePermissions:
+        base-config: default
+        wait-duration-in-open-state: 30s
+
+circleguard:
+  client:
+    auth-service:
+      url: ${CIRCLEGUARD_CLIENT_AUTH_URL:http://localhost:8180}
+      connect-timeout: ${CIRCLEGUARD_CLIENT_AUTH_CONNECT_TIMEOUT:2000}
+      read-timeout: ${CIRCLEGUARD_CLIENT_AUTH_READ_TIMEOUT:3000}
+      write-timeout: ${CIRCLEGUARD_CLIENT_AUTH_WRITE_TIMEOUT:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 spring:
   application:
     name: circleguard-notification-service
@@ -17,10 +59,6 @@ spring:
           auth: false
           starttls:
             enable: false
-
-auth:
-  api:
-    url: ${AUTH_SERVICE_URL:http://localhost:8180}
 
 jwt:
   secret: ${JWT_SECRET:my-super-secret-dev-key-32-chars-long-12345678}

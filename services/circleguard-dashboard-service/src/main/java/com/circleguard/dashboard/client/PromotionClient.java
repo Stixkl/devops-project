@@ -1,44 +1,94 @@
 package com.circleguard.dashboard.client;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-@Component
+@Service
 @Slf4j
 public class PromotionClient {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static final String CACHE_KEY_GLOBAL = "global-stats";
+    private static final String CACHE_KEY_DEPT_PREFIX = "dept-stats:";
 
-    @Value("${PROMOTION_SERVICE_URL:http://localhost:8088}")
-    private String promotionServiceUrl;
+    private final RestTemplate restTemplate;
+    private final String promotionServiceUrl;
+    private final Cache<String, Map> lastSuccessCache;
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getHealthStats() {
-        try {
-            return restTemplate.getForObject(
-                    promotionServiceUrl + "/api/v1/health-status/stats",
-                    Map.class
-            );
-        } catch (Exception e) {
-            log.error("Failed to fetch health stats from promotion-service", e);
-            return Map.of("error", "Service unavailable", "timestamp", new Date());
-        }
+    public PromotionClient(
+            @Value("${circleguard.client.promotion-service.url:http://localhost:8088}")
+            String promotionServiceUrl,
+            @Value("${circleguard.client.promotion-service.connect-timeout:2000}")
+            int connectTimeout,
+            @Value("${circleguard.client.promotion-service.read-timeout:5000}")
+            int readTimeout,
+            @Value("${circleguard.client.promotion-service.write-timeout:3000}")
+            int writeTimeout) {
+        this.promotionServiceUrl = promotionServiceUrl;
+        this.restTemplate = new RestTemplateBuilder()
+                .setConnectTimeout(Duration.ofMillis(connectTimeout))
+                .setReadTimeout(Duration.ofMillis(Math.max(readTimeout, writeTimeout)))
+                .build();
+        this.lastSuccessCache = Caffeine.newBuilder()
+                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .maximumSize(100)
+                .build();
     }
 
     @SuppressWarnings("unchecked")
-    public Map<String, Object> getHealthStatsByDepartment(String department) {
-        try {
-            return restTemplate.getForObject(
-                    promotionServiceUrl + "/api/v1/health-status/stats/department/" + department,
-                    Map.class
-            );
-        } catch (Exception e) {
-            log.error("Failed to fetch department stats from promotion-service", e);
-            return Map.of("error", "Service unavailable", "department", department, "timestamp", new Date());
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackStats")
+    public Map<String, Object> getHealthStats() {
+        Map result = restTemplate.getForObject(
+                promotionServiceUrl + "/api/v1/health-status/stats",
+                Map.class
+        );
+        if (result != null) {
+            lastSuccessCache.put(CACHE_KEY_GLOBAL, Map.copyOf(result));
         }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "fallbackStats")
+    public Map<String, Object> getHealthStatsByDepartment(String department) {
+        Map result = restTemplate.getForObject(
+                promotionServiceUrl + "/api/v1/health-status/stats/department/" + department,
+                Map.class
+        );
+        if (result != null) {
+            lastSuccessCache.put(CACHE_KEY_DEPT_PREFIX + department, Map.copyOf(result));
+        }
+        return result;
+    }
+
+    private Map<String, Object> fallbackStats(String department, Throwable t) {
+        String cacheKey = department != null
+                ? CACHE_KEY_DEPT_PREFIX + department
+                : CACHE_KEY_GLOBAL;
+        Map cached = lastSuccessCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            log.warn("Promotion service unavailable. Returning cached data for key: {}", cacheKey);
+            Map<String, Object> result = new HashMap<>(cached);
+            result.put("cached", true);
+            result.put("cached_at", Instant.now().toString());
+            return Map.copyOf(result);
+        }
+        log.warn("Promotion service unavailable. No cached data for key: {}", cacheKey);
+        return Map.of("error", "Service unavailable", "cached", false);
+    }
+
+    private Map<String, Object> fallbackStats(Throwable t) {
+        return fallbackStats(null, t);
     }
 }

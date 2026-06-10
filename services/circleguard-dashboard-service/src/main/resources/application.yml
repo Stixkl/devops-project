@@ -1,3 +1,46 @@
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 4s
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        record-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      promotionService:
+        base-config: default
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+
+circleguard:
+  client:
+    promotion-service:
+      url: ${CIRCLEGUARD_CLIENT_PROMOTION_URL:http://localhost:8088}
+      connect-timeout: ${CIRCLEGUARD_CLIENT_PROMOTION_CONNECT_TIMEOUT:2000}
+      read-timeout: ${CIRCLEGUARD_CLIENT_PROMOTION_READ_TIMEOUT:5000}
+      write-timeout: ${CIRCLEGUARD_CLIENT_PROMOTION_WRITE_TIMEOUT:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 spring:
   application:
     name: circleguard-dashboard-service

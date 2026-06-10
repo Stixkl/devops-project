@@ -1,13 +1,12 @@
 package com.circleguard.notification.service;
 
+import com.circleguard.notification.client.AuthServiceClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -18,37 +17,28 @@ import java.util.Map;
 public class PriorityAlertListener {
 
     private final ObjectMapper objectMapper;
-    private final TemplateService templateService;
-    private final RestTemplate restTemplate = new RestTemplate();
-
-    @Value("${auth.api.url:http://localhost:8180}")
-    private String authApiUrl;
+    private final AuthServiceClient authServiceClient;
+    private final NotificationDispatcher notificationDispatcher;
 
     @KafkaListener(topics = "alert.priority", groupId = "notification-priority-group")
     public void handlePriorityAlert(String message) {
         log.info("Received alert.priority event: {}", message);
         try {
             Map<String, Object> payload = objectMapper.readValue(message, new TypeReference<Map<String, Object>>() {});
-            String eventType = (String) payload.get("eventType");
-            Integer affectedCount = (Integer) payload.get("affectedCount");
-            
+            Object eventTypeObj = payload.get("eventType");
+            String eventType = eventTypeObj instanceof String ? (String) eventTypeObj : null;
+            Object affectedCountObj = payload.get("affectedCount");
+            Integer affectedCount = affectedCountObj instanceof Number ? ((Number) affectedCountObj).intValue() : null;
+
             log.info("Processing {} Priority Alert. Affected: {}", eventType, affectedCount);
 
-            // Fetch users with the alert:receive_priority permission
-            String url = authApiUrl + "/api/v1/users/permissions/alert:receive_priority";
-            @SuppressWarnings("unchecked")
-            List<Map<String, String>> admins = restTemplate.getForObject(url, List.class);
-            
-            if (admins != null && !admins.isEmpty()) {
-                for (Map<String, String> admin : admins) {
-                    String email = admin.get("email");
-                    String username = admin.get("username");
-                    if (email != null && !email.isEmpty()) {
-                        log.info("Dispatching priority alert to admin email: {}", email);
-                        // Using TemplateService to mock the dispatch for now.
-                        templateService.generateEmailContent(eventType, username);
-                    }
-                }
+            List<String> userIds = authServiceClient.getUsersByPermission("alert:receive_priority");
+
+            if (userIds.size() == 1 && "BROADCAST_ALL".equals(userIds.get(0))) {
+                log.warn("Auth service unavailable — sending priority alert via broadcast to all channels");
+                notificationDispatcher.dispatchToAllChannels(payload);
+            } else if (userIds != null && !userIds.isEmpty()) {
+                notificationDispatcher.dispatchToUsers(payload, userIds);
             } else {
                 log.warn("No administrators found with alert:receive_priority permission.");
             }
