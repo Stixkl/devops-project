@@ -1,0 +1,18 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    access: proxy
+    isDefault: true
+  - name: Elasticsearch
+    type: elasticsearch
+    url: http://elasticsearch:9200
+    access: proxy
+    timeField: "@timestamp"
+    esVersion: 8.x
+  - name: Jaeger
+    type: jaeger
+    url: http://jaeger:16686
+    access: proxy
