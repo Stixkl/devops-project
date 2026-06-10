@@ -99,6 +99,15 @@ pipeline {
         }
         failure {
             echo "Pipeline ${SERVICE_NAME} failed!"
+            // Notificacion automatica de fallos (rubrica CI/CD)
+            mail to: 'devops-team@circleguard.edu',
+                 subject: "[DEV] ${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
+                 body: "Pipeline de ${SERVICE_NAME} fallo en dev.
+
+Build: ${env.BUILD_URL}
+Commit: ${env.GIT_COMMIT}
+
+Revisar consola; rollback segun docs/CHANGE_MANAGEMENT.md si aplica."
         }
         always {
             cleanWs()

@@ -150,6 +150,15 @@ pipeline {
         }
         failure {
             echo "Stage tests FAILED for \${SERVICE_NAME}"
+            // Notificacion automatica de fallos (rubrica CI/CD)
+            mail to: 'devops-team@circleguard.edu,qa-team@circleguard.edu',
+                 subject: "[STAGE] ${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
+                 body: "Pipeline de stage fallo (tests de integracion/E2E/perf o deploy).
+
+Build: ${env.BUILD_URL}
+Commit: ${env.GIT_COMMIT}
+
+La promocion a prod queda bloqueada hasta resolverlo."
         }
     }
 }

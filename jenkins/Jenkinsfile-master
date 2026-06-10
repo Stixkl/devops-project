@@ -136,6 +136,17 @@ pipeline {
     }
 
     post {
+        failure {
+            // Notificacion automatica de fallos en produccion (rubrica CI/CD)
+            mail to: 'devops-team@circleguard.edu,oncall@circleguard.edu',
+                 subject: "[PROD] ${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED — accion requerida",
+                 body: "El despliegue a PRODUCCION fallo.
+
+Build: ${env.BUILD_URL}
+Version: ${env.RELEASE_VERSION}
+
+Ejecutar plan de rollback: kubectl rollout undo (ver docs/CHANGE_MANAGEMENT.md)."
+        }
         always {
             cleanWs()
         }
