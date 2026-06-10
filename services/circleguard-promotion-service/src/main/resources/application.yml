@@ -26,6 +26,10 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+    producer:
+      observation-enabled: true
+    listener:
+      observation-enabled: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -44,3 +48,60 @@ server:
 jwt:
   secret: ${JWT_SECRET:my-super-secret-dev-key-32-chars-long-12345678}
   expiration: ${JWT_EXPIRATION_MS:3600000}
+
+logging:
+  level:
+    com.circleguard: ${LOGGING_LEVEL_CIRCLEGUARD:INFO}
+    org.springframework: WARN
+    org.apache.kafka: WARN
+    org.neo4j: WARN
+    org.hibernate: WARN
+    io.lettuce.core: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus${MANAGEMENT_ENDPOINTS_EXTRA:}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      instance: ${HOSTNAME:unknown}
+      environment: ${ENVIRONMENT:development}
+    export:
+      prometheus:
+        enabled: true
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+    db:
+      enabled: true
+    neo4j:
+      enabled: ${NEO4J_HEALTH_ENABLED:false}
+    kafka:
+      enabled: ${KAFKA_HEALTH_ENABLED:false}
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:false}
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.01}
+    propagation:
+      type: w3c
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://jaeger-collector:9411}/api/v2/spans
+  observations:
+    http:
+      server:
+        exclude-patterns: /actuator/health/**,/actuator/health

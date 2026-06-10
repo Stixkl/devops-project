@@ -1,5 +1,6 @@
 package com.circleguard.promotion.controller;
 
+import com.circleguard.promotion.observability.PromotionMetrics;
 import com.circleguard.promotion.service.HealthStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class HealthStatusController {
     private final HealthStatusService statusService;
+    private final PromotionMetrics promotionMetrics;
 
     @PostMapping("/report")
     @PreAuthorize("hasRole('HEALTH_CENTER')")
@@ -20,6 +22,7 @@ public class HealthStatusController {
         String status = (String) request.get("status");
         boolean override = request.containsKey("adminOverride") && (boolean) request.get("adminOverride");
         
+        promotionMetrics.recordHealthReport();
         statusService.updateStatus(anonymousId, status, override);
         return ResponseEntity.ok().build();
     }
@@ -28,6 +31,7 @@ public class HealthStatusController {
     @PreAuthorize("hasRole('HEALTH_CENTER')")
     public ResponseEntity<Void> confirmPositive(@RequestBody Map<String, String> request) {
         String anonymousId = request.get("anonymousId");
+        promotionMetrics.recordHealthReport();
         statusService.updateStatus(anonymousId, "CONFIRMED");
         return ResponseEntity.ok().build();
     }
@@ -35,6 +39,7 @@ public class HealthStatusController {
     @PostMapping("/recovery/{id}")
     @PreAuthorize("hasRole('HEALTH_CENTER')")
     public ResponseEntity<Void> recover(@PathVariable String id) {
+        promotionMetrics.recordHealthReport();
         statusService.promoteToRecovered(id);
         return ResponseEntity.ok().build();
     }
@@ -45,6 +50,7 @@ public class HealthStatusController {
         String anonymousId = (String) request.get("anonymousId");
         boolean override = request.containsKey("adminOverride") && (boolean) request.get("adminOverride");
 
+        promotionMetrics.recordHealthReport();
         statusService.resolveStatus(anonymousId, override);
         return ResponseEntity.ok().build();
     }

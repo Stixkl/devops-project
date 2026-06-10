@@ -1,6 +1,7 @@
 package com.circleguard.promotion.controller;
 
 import com.circleguard.promotion.model.graph.CircleNode;
+import com.circleguard.promotion.observability.PromotionMetrics;
 import com.circleguard.promotion.service.CircleService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import java.util.List;
 public class CircleController {
 
     private final CircleService circleService;
+    private final PromotionMetrics promotionMetrics;
 
     @Data
     public static class CircleCreateRequest {
@@ -23,6 +25,7 @@ public class CircleController {
 
     @PostMapping
     public ResponseEntity<CircleNode> createCircle(@RequestBody CircleCreateRequest request) {
+        promotionMetrics.recordCircleCreated();
         return ResponseEntity.ok(circleService.createCircle(request.getName(), request.getLocationId()));
     }
 

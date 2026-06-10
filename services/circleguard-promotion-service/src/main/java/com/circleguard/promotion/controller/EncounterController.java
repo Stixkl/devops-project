@@ -1,5 +1,6 @@
 package com.circleguard.promotion.controller;
 
+import com.circleguard.promotion.observability.PromotionMetrics;
 import com.circleguard.promotion.repository.graph.UserNodeRepository;
 import com.circleguard.promotion.service.AutoCircleService;
 import lombok.Data;
@@ -19,6 +20,7 @@ public class EncounterController {
 
     private final UserNodeRepository userRepository;
     private final AutoCircleService autoCircleService;
+    private final PromotionMetrics promotionMetrics;
 
     @Data
     public static class EncounterRequest {
@@ -39,6 +41,7 @@ public class EncounterController {
             request.getLocationId() != null ? request.getLocationId() : "mobile_ble"
         );
 
+        promotionMetrics.recordEncounterReported();
         autoCircleService.evaluateEncounter(request.getSourceId(), request.getTargetId());
         
         return ResponseEntity.ok().build();
@@ -56,6 +59,7 @@ public class EncounterController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('HEALTH_CENTER')")
     public ResponseEntity<Void> forceFence(@org.springframework.web.bind.annotation.PathVariable Long id) {
         log.info("Force fencing encounter relationship: {}", id);
+        promotionMetrics.recordFencingEvent();
         userRepository.forceEncounterFence(id);
         return ResponseEntity.ok().build();
     }

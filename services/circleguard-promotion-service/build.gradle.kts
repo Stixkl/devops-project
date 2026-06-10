@@ -29,4 +29,10 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.19.3")
     testImplementation("org.testcontainers:postgresql:1.19.3")
     testImplementation("org.testcontainers:neo4j:1.19.3")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
+    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
+    implementation("io.micrometer:micrometer-registry-logback")
+    testImplementation("io.micrometer:micrometer-tracing-integration-test")
 }
