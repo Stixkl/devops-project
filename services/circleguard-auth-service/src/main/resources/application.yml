@@ -32,14 +32,60 @@ circleguard:
       read-timeout: ${CIRCLEGUARD_CLIENT_IDENTITY_READ_TIMEOUT:3000}
       write-timeout: ${CIRCLEGUARD_CLIENT_IDENTITY_WRITE_TIMEOUT:3000}
 
+logging:
+  level:
+    com.circleguard: ${LOGGING_LEVEL_CIRCLEGUARD:INFO}
+    org.springframework: WARN
+    org.apache.kafka: WARN
+    org.neo4j: WARN
+    org.hibernate: WARN
+    io.lettuce.core: WARN
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,circuitbreakers
+        include: health,info,prometheus,circuitbreakers${MANAGEMENT_ENDPOINTS_EXTRA:}
   metrics:
     tags:
       application: ${spring.application.name}
+      instance: ${HOSTNAME:unknown}
+      environment: ${ENVIRONMENT:development}
+    export:
+      prometheus:
+        enabled: true
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+    db:
+      enabled: true
+    ldap:
+      enabled: true
+    circuitbreakers:
+      enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.01}
+    propagation:
+      type: w3c
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://jaeger-collector:9411}/api/v2/spans
+  observations:
+    http:
+      server:
+        exclude-patterns: /actuator/health/**,/actuator/health
 
 spring:
   application:

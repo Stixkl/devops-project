@@ -3,6 +3,7 @@ package com.circleguard.auth.controller;
 import com.circleguard.auth.client.IdentityClient;
 import com.circleguard.auth.client.IdentityMapping;
 import com.circleguard.auth.client.IdentityMappingRequest;
+import com.circleguard.auth.observability.AuthMetrics;
 import com.circleguard.auth.service.JwtTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class LoginController {
     private final AuthenticationManager authManager;
     private final JwtTokenService jwtService;
     private final IdentityClient identityClient;
+    private final AuthMetrics authMetrics;
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> request) {
@@ -36,8 +38,8 @@ public class LoginController {
 
             Optional<IdentityMapping> mapping = identityClient.mapIdentity(new IdentityMappingRequest(username));
             String mode;
-
             UUID anonymousId;
+
             if (mapping.isPresent()) {
                 anonymousId = mapping.get().anonymousId();
                 mode = "full";
@@ -45,16 +47,11 @@ public class LoginController {
                 log.warn("Login degraded: identity-service unavailable, proceeding without identity mapping");
                 anonymousId = UUID.nameUUIDFromBytes(auth.getName().getBytes());
                 mode = "degraded";
+                authMetrics.recordLoginDegraded();
+            }
 
-                Map<String, String> degradedBody = new LinkedHashMap<>();
-                degradedBody.put("token", jwtService.generateToken(anonymousId, auth));
-                degradedBody.put("type", "Bearer");
-                degradedBody.put("anonymousId", anonymousId.toString());
-                degradedBody.put("mode", mode);
-
-                return ResponseEntity.ok()
-                        .header("X-Auth-Degraded", "true")
-                        .body(degradedBody);
+            if ("full".equals(mode)) {
+                authMetrics.recordLoginSuccess();
             }
 
             String token = jwtService.generateToken(anonymousId, auth);
@@ -65,8 +62,15 @@ public class LoginController {
             responseBody.put("anonymousId", anonymousId.toString());
             responseBody.put("mode", mode);
 
+            if ("degraded".equals(mode)) {
+                return ResponseEntity.ok()
+                        .header("X-Auth-Degraded", "true")
+                        .body(responseBody);
+            }
+
             return ResponseEntity.ok(responseBody);
         } catch (org.springframework.security.core.AuthenticationException e) {
+            authMetrics.recordLoginFailure();
             return ResponseEntity.status(401).body(Map.of("message", "Invalid username or password"));
         } catch (Exception e) {
             log.error("Unexpected error during login for {}", username, e);
