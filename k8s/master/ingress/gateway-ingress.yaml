@@ -1,0 +1,31 @@
+# Ingress TLS del único servicio expuesto públicamente (gateway-service).
+# cert-manager emite y renueva el certificado automáticamente
+# (anotación cluster-issuer); el tráfico HTTP se redirige a HTTPS.
+# El resto de servicios permanece ClusterIP, solo alcanzable dentro del
+# cluster (con mTLS de Linkerd entre pods).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: circleguard-gateway
+  namespace: circleguard-master
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - circleguard.example.com
+      secretName: circleguard-gateway-tls
+  rules:
+    - host: circleguard.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 80

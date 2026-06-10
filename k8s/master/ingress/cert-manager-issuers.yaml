@@ -1,0 +1,30 @@
+# TLS para servicios expuestos públicamente (rúbrica Seguridad).
+# Prerrequisito (una vez por cluster):
+#   helm repo add jetstack https://charts.jetstack.io
+#   helm install cert-manager jetstack/cert-manager -n cert-manager \
+#     --create-namespace --set crds.enabled=true
+#
+# Emisor productivo: Let's Encrypt (ACME HTTP-01 a través del Ingress).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops-team@circleguard.edu
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+# Emisor self-signed para clusters locales/dev (kind, docker-desktop),
+# donde Let's Encrypt no puede resolver el dominio.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}
