@@ -32,6 +32,10 @@ spec:
         - secretRef:
             name: circleguard-secrets
         env:
+        - name: LOGSTASH_HOST
+          value: "logstash.observability.svc.cluster.local"
+        - name: LOGSTASH_PORT
+          value: "5000"
         - name: JAVA_OPTS
           value: "-Xmx512m -Xms256m -XX:+UseG1GC"
         resources:

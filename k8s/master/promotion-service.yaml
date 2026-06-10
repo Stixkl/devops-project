@@ -20,6 +20,11 @@ spec:
         image: circleguard/promotion-service:${RELEASE_VERSION}
         ports:
         - containerPort: 8088
+        env:
+        - name: LOGSTASH_HOST
+          value: "logstash.observability.svc.cluster.local"
+        - name: LOGSTASH_PORT
+          value: "5000"
         envFrom:
         - configMapRef:
             name: promotion-service-config
