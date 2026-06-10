@@ -1,0 +1,10 @@
+# Cluster kind que simula el sitio de RESPALDO en GCP (GKE).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: cg-gcp-sim
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 32080
+        protocol: TCP

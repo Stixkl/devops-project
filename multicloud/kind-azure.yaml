@@ -1,0 +1,12 @@
+# Cluster kind que simula el sitio ACTIVO en Azure (AKS).
+# El puerto 30080 del nodo se publica en localhost:31080 para que el
+# balanceador HAProxy (multicloud/docker-compose.yml) lo alcance.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: cg-azure-sim
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 31080
+        protocol: TCP

@@ -1,0 +1,14 @@
+# Balanceador global multi-cloud (demo local).
+# curl http://localhost:8090  -> alterna entre cloud=azure y cloud=gcp
+# stats: http://localhost:8404
+services:
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: multicloud-lb
+    ports:
+      - "8090:8090"
+      - "8404:8404"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

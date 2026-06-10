@@ -1,0 +1,29 @@
+# DR multi-cloud: respaldo programado con Velero desde el cluster activo
+# (AKS) hacia un bucket en el cloud OPUESTO (GCS), de modo que la pérdida
+# total del proveedor primario no se lleva también los respaldos.
+#
+# Prerrequisito (una vez, en el cluster AKS):
+#   velero install \
+#     --provider gcp \
+#     --plugins velero/velero-plugin-for-gcp:v1.10.0 \
+#     --bucket cg-velero-dr \
+#     --secret-file ./gcp-velero-sa.json
+#
+# Restauración en el sitio pasivo (GKE):
+#   velero restore create --from-backup <ultimo-backup>
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: circleguard-daily-dr
+  namespace: velero
+spec:
+  # Diario 02:00 UTC; retención 7 días (RPO objetivo: 24h, RTO: < 1h)
+  schedule: "0 2 * * *"
+  template:
+    ttl: 168h
+    includedNamespaces:
+      - circleguard-dev
+      - circleguard-stage
+      - circleguard-master
+    snapshotVolumes: true
+    storageLocation: default
