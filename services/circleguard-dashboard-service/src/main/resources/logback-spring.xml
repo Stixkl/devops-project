@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty name="appName" source="spring.application.name" defaultValue="circleguard-dashboard-service"/>
+    <springProperty name="environment" source="ENVIRONMENT" defaultValue="development"/>
+
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <customFields>{"application":"${appName}","environment":"${environment}"}</customFields>
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <version>[ignore]</version>
+                <logger>logger.name</logger>
+                <thread>thread</thread>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+            <timeZone>UTC</timeZone>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="JSON_CONSOLE"/>
+    </root>
+</configuration>

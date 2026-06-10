@@ -1,5 +1,6 @@
 package com.circleguard.dashboard.client;
 
+import com.circleguard.dashboard.observability.DashboardMetrics;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -24,12 +25,14 @@ public class PromotionClient {
 
     private final RestTemplate restTemplate;
     private final String promotionServiceUrl;
+    private final DashboardMetrics dashboardMetrics;
     private final Cache<String, Map> lastSuccessCache = Caffeine.newBuilder()
             .expireAfterWrite(30, TimeUnit.MINUTES)
             .maximumSize(100)
             .build();
 
     public PromotionClient(
+            DashboardMetrics dashboardMetrics,
             @Value("${circleguard.client.promotion-service.url:http://localhost:8088}")
             String promotionServiceUrl,
             @Value("${circleguard.client.promotion-service.connect-timeout:2000}")
@@ -38,6 +41,7 @@ public class PromotionClient {
             int readTimeout,
             @Value("${circleguard.client.promotion-service.write-timeout:3000}")
             int writeTimeout) {
+        this.dashboardMetrics = dashboardMetrics;
         this.promotionServiceUrl = promotionServiceUrl;
         this.restTemplate = new RestTemplateBuilder()
                 .setConnectTimeout(Duration.ofMillis(connectTimeout))
@@ -55,6 +59,7 @@ public class PromotionClient {
         if (result != null) {
             lastSuccessCache.put(CACHE_KEY_GLOBAL, Map.copyOf(result));
         }
+        dashboardMetrics.recordAnalyticsQuery();
         return result;
     }
 
@@ -68,6 +73,7 @@ public class PromotionClient {
         if (result != null) {
             lastSuccessCache.put(CACHE_KEY_DEPT_PREFIX + department, Map.copyOf(result));
         }
+        dashboardMetrics.recordAnalyticsQuery();
         return result;
     }
 
@@ -78,6 +84,7 @@ public class PromotionClient {
         if (lastSuccessCache != null) {
             Map cached = lastSuccessCache.getIfPresent(cacheKey);
             if (cached != null) {
+                dashboardMetrics.recordCacheHit();
                 log.warn("Promotion service unavailable. Returning cached data for key: {}", cacheKey);
                 Map<String, Object> result = new HashMap<>(cached);
                 result.put("cached", true);
@@ -85,6 +92,7 @@ public class PromotionClient {
                 return Map.copyOf(result);
             }
         }
+        dashboardMetrics.recordCacheMiss();
         log.warn("Promotion service unavailable. No cached data for key: {}", cacheKey);
         return Map.of("error", "Service unavailable", "cached", false);
     }
