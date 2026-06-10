@@ -1,0 +1,109 @@
+prometheus:
+  prometheusSpec:
+    retention: 10d
+    retentionSize: 40GB
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+  service:
+    type: ClusterIP
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+    secrets:
+      - alertmanager-secret
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: smtp.example.com:587
+      smtp_from: alertmanager@circleguard.com
+    route:
+      receiver: default
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - match:
+            severity: critical
+          receiver: critical
+        - match:
+            severity: warning
+          receiver: warning
+    receivers:
+      - name: default
+        email_configs:
+          - to: team@circleguard.com
+      - name: critical
+        email_configs:
+          - to: oncall@circleguard.com
+            auth_username: alertmanager@circleguard.com
+            auth_password_file: /etc/alertmanager/secrets/smtp_auth_password
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/slack_api_url
+            channel: "#circleguard-alerts"
+      - name: warning
+        email_configs:
+          - to: team@circleguard.com
+
+grafana:
+  adminPassword: admin
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-operated:9090
+          access: proxy
+          isDefault: true
+        - name: Elasticsearch
+          type: elasticsearch
+          url: http://elasticsearch:9200
+          access: proxy
+          timeField: "@timestamp"
+          esVersion: 8.x
+        - name: Jaeger
+          type: jaeger
+          url: http://jaeger-query:16686
+          access: proxy
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: circleguard
+          orgId: 1
+          folder: CircleGuard
+          type: file
+          disableDeletion: true
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/circleguard
+  dashboardsConfigMaps:
+    circleguard: circleguard-grafana-dashboards
