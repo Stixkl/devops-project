@@ -83,24 +83,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   network_profile {
-    network_plugin      = "azure"
-    dns_service_ip      = var.service_cidr
-    service_cidr        = var.service_cidr
-    docker_bridge_cidr  = "172.17.0.1/16"
-  }
-
-  addon_profile {
-    oms_agent {
-      enabled                    = false
-      log_analytics_workspace_id = ""
-    }
+    network_plugin = "azure"
+    dns_service_ip = cidrhost(var.service_cidr, 10)
+    service_cidr   = var.service_cidr
   }
 
   tags = var.tags
-
-  role_based_access_control {
-    enabled = true
-  }
 }
 
 # Nodepools adicionales (segundo en adelante)
@@ -119,6 +107,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "additional" {
   vnet_subnet_id        = azurerm_subnet.aks.id
   priority              = try(each.value.priority, null)
   eviction_policy       = try(each.value.eviction_policy, null)
+  spot_max_price        = try(each.value.spot_max_price, null)
+  # Los nodos Spot reciben automáticamente el taint
+  # kubernetes.azure.com/scalesetpriority=spot:NoSchedule; las cargas
+  # tolerantes a interrupciones deben declarar la toleration.
 
   depends_on = [
     azurerm_kubernetes_cluster.aks

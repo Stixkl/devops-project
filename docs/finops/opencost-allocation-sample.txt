@@ -1,0 +1,10 @@
+namespace              cpuCost   ramCost   totalCost  cpuEff
+chaos-mesh              0.00012   0.00009    0.00021    1.6%
+circleguard-chaos       0.00015   0.00003    0.00019    0.4%
+circleguard-mesh        0.00000   0.00000    0.00000    0.0%
+kube-system             0.00059   0.00002    0.00061    2.2%
+linkerd                 0.00000   0.00000    0.00000    0.0%
+linkerd-viz             0.00000   0.00000    0.00000    0.0%
+local-path-storage      0.00000   0.00000    0.00000    0.0%
+opencost                0.00001   0.00001    0.00002    9.5%
+TOTAL ventana 30m: 0.00103 USD

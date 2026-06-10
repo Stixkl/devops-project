@@ -46,6 +46,22 @@ module "aks_stage" {
       enable_auto_scaling = true
       os_disk_type       = "Managed"
       os_disk_size_gb    = 128
+    },
+    {
+      # FinOps: capacidad de ráfaga en nodos Spot (hasta -90% de costo).
+      # min 0 = scale-to-zero cuando no hay carga; las cargas que corren aquí
+      # toleran evicción (taint scalesetpriority=spot:NoSchedule).
+      name               = "burst"
+      vm_size            = "Standard_B2ms"
+      node_count         = 0
+      min_count          = 0
+      max_count          = 3
+      enable_auto_scaling = true
+      priority           = "Spot"
+      eviction_policy    = "Delete"
+      spot_max_price     = -1
+      os_disk_type       = "Managed"
+      os_disk_size_gb    = 128
     }
   ]
 
@@ -64,14 +80,15 @@ module "aks_prod" {
 
   nodepools = [
     {
+      # System pool SIEMPRE on-demand: alojar el plano de sistema en Spot
+      # arriesga evicciones de CoreDNS/metrics; el ahorro Spot va en pools
+      # de usuario tolerantes (ver pool burst de stage).
       name               = "system"
       vm_size            = "Standard_B4ms"
       node_count         = 3
       min_count          = 3
       max_count          = 5
       enable_auto_scaling = true
-      priority           = "Spot"
-      eviction_policy    = "Delete"
       os_disk_type       = "Managed"
       os_disk_size_gb    = 128
     },

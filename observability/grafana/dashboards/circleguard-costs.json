@@ -1,0 +1,71 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "CircleGuard - FinOps / Costos",
+  "uid": "cg-costs",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "1m",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Costo total cluster (USD/h)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(node_total_hourly_cost)", "legendFormat": "USD/h" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3 } }
+    },
+    {
+      "type": "stat",
+      "title": "Proyección mensual (USD)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(node_total_hourly_cost) * 730", "legendFormat": "USD/mes" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 0 } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Costo CPU por namespace (USD/h)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (namespace) (container_cpu_allocation * on(node) group_left() node_cpu_hourly_cost)",
+          "legendFormat": "{{namespace}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Costo RAM por namespace (USD/h)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (namespace) (container_memory_allocation_bytes / 1024 / 1024 / 1024 * on(node) group_left() node_ram_hourly_cost)",
+          "legendFormat": "{{namespace}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Sobredimensionamiento: uso real CPU vs requests (por namespace)",
+      "description": "< 1 = se paga capacidad reservada que no se usa (candidato a right-sizing)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m])) / sum by (namespace) (kube_pod_container_resource_requests{resource=\"cpu\"})",
+          "legendFormat": "{{namespace}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1.5 } }
+    }
+  ]
+}
