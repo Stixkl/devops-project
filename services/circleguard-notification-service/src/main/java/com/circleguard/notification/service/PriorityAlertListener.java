@@ -1,6 +1,7 @@
 package com.circleguard.notification.service;
 
 import com.circleguard.notification.client.AuthServiceClient;
+import com.circleguard.notification.observability.NotificationMetrics;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class PriorityAlertListener {
     private final ObjectMapper objectMapper;
     private final AuthServiceClient authServiceClient;
     private final NotificationDispatcher notificationDispatcher;
+    private final NotificationMetrics notificationMetrics;
 
     @KafkaListener(topics = "alert.priority", groupId = "notification-priority-group")
     public void handlePriorityAlert(String message) {
@@ -36,6 +38,7 @@ public class PriorityAlertListener {
 
             if (userIds.size() == 1 && "BROADCAST_ALL".equals(userIds.get(0))) {
                 log.warn("Auth service unavailable — sending priority alert via broadcast to all channels");
+                notificationMetrics.recordBroadcast();
                 notificationDispatcher.dispatchToAllChannels(payload);
             } else if (userIds != null && !userIds.isEmpty()) {
                 notificationDispatcher.dispatchToUsers(payload, userIds);

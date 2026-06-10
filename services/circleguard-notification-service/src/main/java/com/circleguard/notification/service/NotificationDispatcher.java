@@ -1,5 +1,6 @@
 package com.circleguard.notification.service;
 
+import com.circleguard.notification.observability.NotificationMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ public class NotificationDispatcher {
     private final SmsService smsService;
     private final PushService pushService;
     private final TemplateService templateService;
+    private final NotificationMetrics notificationMetrics;
 
     public void dispatch(String userId, String status) {
         log.info("Dispatching contextual multi-channel notifications for user: {} with status: {}", userId, status);
@@ -26,10 +28,12 @@ public class NotificationDispatcher {
         Map<String, String> pushMetadata = templateService.generatePushMetadata(status);
         String smsContent = templateService.generateSmsContent(status);
 
+        notificationMetrics.recordSentTotal();
+
         CompletableFuture.allOf(
-            emailService.sendAsync(userId, emailContent),
-            smsService.sendAsync(userId, smsContent),
-            pushService.sendAsync(userId, pushContent, pushMetadata)
+            emailService.sendAsync(userId, emailContent).thenRun(notificationMetrics::recordSentEmail),
+            smsService.sendAsync(userId, smsContent).thenRun(notificationMetrics::recordSentSms),
+            pushService.sendAsync(userId, pushContent, pushMetadata).thenRun(notificationMetrics::recordSentPush)
         ).handle((result, ex) -> {
             if (ex != null) {
                 log.error("Error during multi-channel dispatch for user {}: {}", userId, ex.getMessage());
@@ -51,10 +55,13 @@ public class NotificationDispatcher {
 
         String broadcastId = "BROADCAST_" + eventType;
 
+        notificationMetrics.recordSentTotal();
+        notificationMetrics.recordBroadcast();
+
         CompletableFuture.allOf(
-            emailService.sendAsync(broadcastId, emailContent),
-            smsService.sendAsync(broadcastId, smsContent),
-            pushService.sendAsync(broadcastId, pushContent, pushMetadata)
+            emailService.sendAsync(broadcastId, emailContent).thenRun(notificationMetrics::recordSentEmail),
+            smsService.sendAsync(broadcastId, smsContent).thenRun(notificationMetrics::recordSentSms),
+            pushService.sendAsync(broadcastId, pushContent, pushMetadata).thenRun(notificationMetrics::recordSentPush)
         ).handle((result, ex) -> {
             if (ex != null) {
                 log.error("Error during broadcast dispatch for event '{}': {}", eventType, ex.getMessage());
