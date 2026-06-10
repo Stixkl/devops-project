@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: neo4j-jmx
+  namespace: observability
+  labels:
+    release: prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  podMetricsEndpoints:
+    - port: jmx-metrics
+      interval: 30s
+      scrapeTimeout: 10s
