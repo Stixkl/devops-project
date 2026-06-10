@@ -1,5 +1,6 @@
 package com.circleguard.identity.controller;
 
+import com.circleguard.identity.observability.IdentityMetrics;
 import com.circleguard.identity.service.IdentityVaultService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.time.Instant;
 public class IdentityVaultController {
     private final IdentityVaultService vaultService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final IdentityMetrics identityMetrics;
 
     /**
      * Maps a real identity to an anonymous ID. 
@@ -28,6 +30,7 @@ public class IdentityVaultController {
     public ResponseEntity<Map<String, UUID>> mapIdentity(@RequestBody Map<String, String> request) {
         String realIdentity = request.get("realIdentity");
         UUID anonymousId = vaultService.getOrCreateAnonymousId(realIdentity);
+        identityMetrics.recordMappingCreated();
         return ResponseEntity.ok(Map.of("anonymousId", anonymousId));
     }
 
@@ -43,7 +46,7 @@ public class IdentityVaultController {
         // Combine details into a single identity string for the vault
         String realIdentity = "VISITOR|" + email + "|" + name + "|" + reason;
         UUID anonymousId = vaultService.getOrCreateAnonymousId(realIdentity);
-        
+        identityMetrics.recordVisitorRegistered();
         return ResponseEntity.ok(Map.of("anonymousId", anonymousId));
     }
 
@@ -60,6 +63,7 @@ public class IdentityVaultController {
 
         try {
             realIdentity = vaultService.resolveRealIdentity(id);
+            identityMetrics.recordLookupExecuted();
             return ResponseEntity.ok(Map.of("realIdentity", realIdentity));
         } catch (org.springframework.web.server.ResponseStatusException e) {
             status = "FAILURE_" + e.getStatusCode().toString();

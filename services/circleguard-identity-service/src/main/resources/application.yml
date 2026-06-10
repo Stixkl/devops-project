@@ -24,5 +24,61 @@ vault:
 jwt:
   secret: ${JWT_SECRET:my-super-secret-dev-key-32-chars-long-12345678}
 
+logging:
+  level:
+    com.circleguard: ${LOGGING_LEVEL_CIRCLEGUARD:INFO}
+    org.springframework: WARN
+    org.apache.kafka: WARN
+    org.hibernate: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus${MANAGEMENT_ENDPOINTS_EXTRA:}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      instance: ${HOSTNAME:unknown}
+      environment: ${ENVIRONMENT:development}
+    export:
+      prometheus:
+        enabled: true
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+    db:
+      enabled: true
+    kafka:
+      enabled: ${KAFKA_HEALTH_ENABLED:false}
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.01}
+    propagation:
+      type: w3c
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://jaeger-collector:9411}/api/v2/spans
+  observations:
+    http:
+      server:
+        exclude-patterns: /actuator/health/**,/actuator/health
+
+spring:
+  kafka:
+    producer:
+      observation-enabled: true
+
 server:
   port: ${SERVER_PORT:8083}

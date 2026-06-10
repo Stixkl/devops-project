@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProperty name="application" source="spring.application.name" defaultValue="unknown"/>
+    <springProperty name="environment" source="ENVIRONMENT" defaultValue="development"/>
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <customFields>{"application":"${application}","environment":"${environment}"}</customFields>
+        </encoder>
+    </appender>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} [%X{traceId}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <springProfile name="local">
+        <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    </springProfile>
+    <springProfile name="!local">
+        <root level="INFO"><appender-ref ref="JSON"/></root>
+    </springProfile>
+    <logger name="com.circleguard" level="DEBUG" additivity="false">
+        <springProfile name="!local"><appender-ref ref="JSON"/></springProfile>
+        <springProfile name="local"><appender-ref ref="CONSOLE"/></springProfile>
+    </logger>
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+</configuration>
