@@ -44,6 +44,9 @@ class LoginControllerDegradedTest {
     @MockBean
     private CustomUserDetailsService userDetailsService;
 
+    @MockBean
+    private com.circleguard.auth.observability.AuthMetrics authMetrics;
+
     @Test
     void shouldReturnDegradedModeWhenIdentityServiceUnavailable() throws Exception {
         String username = "testuser";

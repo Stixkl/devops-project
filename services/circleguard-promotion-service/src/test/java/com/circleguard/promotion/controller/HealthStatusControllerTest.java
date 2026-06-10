@@ -25,6 +25,9 @@ class HealthStatusControllerTest {
     @MockBean
     private HealthStatusService statusService;
 
+    @MockBean
+    private com.circleguard.promotion.observability.PromotionMetrics promotionMetrics;
+
     @Test
     @WithMockUser(authorities = "ROLE_HEALTH_CENTER")
     void confirmPositive_WithPermission_CallsUpdateStatus() throws Exception {

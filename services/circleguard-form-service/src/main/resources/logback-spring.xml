@@ -7,7 +7,7 @@
     <springProperty name="environment" source="ENVIRONMENT" defaultValue="development"/>
 
     <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-        <destination>${LOGSTASH_HOST:localhost}:${LOGSTASH_PORT:5000}</destination>
+        <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <includeCallerInfo>true</includeCallerInfo>
             <customFields>{"service":"${serviceName}","environment":"${environment}"}</customFields>
@@ -23,15 +23,8 @@
         <includeCallerData>false</includeCallerData>
     </appender>
 
-    <appender name="METRICS" class="io.micrometer.core.instrument.logback.MeterRegistryAppender">
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>WARN</level>
-        </filter>
-    </appender>
-
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="ASYNC_LOGSTASH"/>
-        <appender-ref ref="METRICS"/>
     </root>
 </configuration>

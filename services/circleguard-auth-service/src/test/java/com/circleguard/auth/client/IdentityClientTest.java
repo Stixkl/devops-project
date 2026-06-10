@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
     DataSourceTransactionManagerAutoConfiguration.class,
     HibernateJpaAutoConfiguration.class,
     FlywayAutoConfiguration.class,
-    SecurityAutoConfiguration.class
+    SecurityAutoConfiguration.class,
+    org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration.class
 })
 @TestPropertySource(properties = {
     "circleguard.client.identity-service.url=http://localhost:18083",

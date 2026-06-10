@@ -1,0 +1,23 @@
+# Canary traffic shifting via the Gateway API HTTPRoute that Linkerd
+# implements. Requests to the apex Service "backend" are split 90/10
+# between v1 and v2. Shifting the weights (e.g. 50/50, then 0/100)
+# progresses or rolls back the canary with no client changes.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-canary
+  namespace: circleguard-mesh
+spec:
+  parentRefs:
+  - name: backend
+    kind: Service
+    group: core
+    port: 80
+  rules:
+  - backendRefs:
+    - name: backend-v1
+      port: 80
+      weight: 90
+    - name: backend-v2
+      port: 80
+      weight: 10

@@ -1,0 +1,101 @@
+# Two versions of a backend workload used to demonstrate canary traffic
+# shifting. Both are selected by the apex Service "backend" through their
+# shared label app=backend, but each version also has its own Service so an
+# HTTPRoute can split traffic between them by weight.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v1
+  namespace: circleguard-mesh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v1
+    spec:
+      containers:
+      - name: backend
+        image: hashicorp/http-echo:1.0
+        args: ["-text=response from backend v1", "-listen=:5678"]
+        ports:
+        - containerPort: 5678
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v2
+  namespace: circleguard-mesh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v2
+    spec:
+      containers:
+      - name: backend
+        image: hashicorp/http-echo:1.0
+        args: ["-text=response from backend v2", "-listen=:5678"]
+        ports:
+        - containerPort: 5678
+---
+# Per-version Services: the HTTPRoute backendRefs point at these.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-v1
+  namespace: circleguard-mesh
+spec:
+  selector:
+    app: backend
+    version: v1
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-v2
+  namespace: circleguard-mesh
+spec:
+  selector:
+    app: backend
+    version: v2
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5678
+---
+# Apex Service the client calls. The failure-accrual annotation enables
+# Linkerd's circuit breaker: an endpoint that returns consecutive failures
+# is temporarily removed from the load-balancing pool (then probed back in).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: circleguard-mesh
+  annotations:
+    balancer.linkerd.io/failure-accrual: consecutive
+    balancer.linkerd.io/failure-accrual-consecutive-max-failures: "5"
+    balancer.linkerd.io/failure-accrual-consecutive-min-penalty: "1s"
+    balancer.linkerd.io/failure-accrual-consecutive-max-penalty: "60s"
+spec:
+  selector:
+    app: backend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5678

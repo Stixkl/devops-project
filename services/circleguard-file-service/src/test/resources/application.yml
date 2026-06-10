@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: circleguard-file-service
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+file:
+  upload-dir: ${java.io.tmpdir}/circleguard-e2e-uploads
+
+jwt:
+  secret: "my-super-secret-test-key-32-chars-long"

@@ -18,6 +18,9 @@ public class GateControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.circleguard.gateway.observability.GatewayMetrics gatewayMetrics;
+
     @MockBean
     private QrValidationService validationService;
 

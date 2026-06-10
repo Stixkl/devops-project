@@ -1,0 +1,495 @@
+name: CI
+
+on:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ dev ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, identity-service, promotion-service, notification-service, form-service, gateway-service, file-service, dashboard-service, mobile]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Set up Node.js (for mobile)
+        if: matrix.service == 'mobile'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Build and test ${{ matrix.service }}
+        run: |
+          if [ "${{ matrix.service }}" = "mobile" ]; then
+            cd mobile
+            npm ci
+            npm run test
+          else
+            ./gradlew :services:circleguard-${{ matrix.service }}:test
+          fi
+
+      - name: Generate JaCoCo report
+        if: matrix.service != 'mobile'
+        run: ./gradlew :services:circleguard-${{ matrix.service }}:jacocoTestReport
+
+      - name: Upload JaCoCo coverage report
+        if: matrix.service != 'mobile'
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/circleguard-${{ matrix.service }}/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: ${{ matrix.service }}
+          fail_ci_if_error: false
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.dev.yml up -d
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to start..."
+          sleep 60
+
+      - name: Run cross-service integration tests
+        run: ./gradlew :tests:integration-tests:test --no-daemon
+
+      - name: Generate coverage report for all services
+        run: ./gradlew jacocoTestReport
+
+      - name: Upload aggregated coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: '**/build/reports/jacoco/test/jacocoTestReport.xml'
+          flags: integration-tests
+          fail_ci_if_error: false
+
+      - name: Stop infrastructure
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.dev.yml up -d
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker exec circleguard-postgres pg_isready -U admin -d circleguard && break
+            echo "Waiting for postgres... ($i/30)"
+            sleep 3
+          done
+
+      - name: Start core services
+        run: bash scripts/ci-start-services.sh
+
+      - name: Run Cypress E2E tests
+        working-directory: tests/e2e/cypress
+        run: |
+          npm install
+          npx cypress run
+
+      - name: Upload Cypress screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots
+          path: tests/e2e/cypress/cypress/screenshots
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop services and infrastructure
+        if: always()
+        run: |
+          [ -f /tmp/cg-pids ] && xargs -r kill < /tmp/cg-pids 2>/dev/null || true
+          docker compose -f docker-compose.dev.yml down
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    needs: build
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Run OWASP Dependency Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./gradlew dependencyCheckAggregate --no-daemon
+
+      - name: Upload Dependency Check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-reports
+          path: build/reports/dependency-check/
+          retention-days: 30
+
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: integration-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Locust
+        run: pip install locust==2.24.0
+
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.dev.yml up -d postgres openldap
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker exec circleguard-postgres pg_isready -U admin -d circleguard && break
+            echo "Waiting for postgres... ($i/30)"
+            sleep 3
+          done
+
+      - name: Build auth-service and dashboard-service JARs
+        run: |
+          ./gradlew :services:circleguard-auth-service:bootJar \
+                    :services:circleguard-dashboard-service:bootJar \
+                    --no-daemon
+
+      - name: Start auth-service
+        run: |
+          java -jar services/circleguard-auth-service/build/libs/*.jar \
+            --server.port=8180 \
+            --spring.datasource.url=jdbc:postgresql://localhost:5432/circleguard_auth \
+            --spring.datasource.username=admin \
+            --spring.datasource.password=password \
+            --jwt.secret=my-super-secret-ci-key-32-chars-long!! \
+            --spring.ldap.urls=ldap://localhost:389 > /tmp/auth.log 2>&1 &
+          echo $! > /tmp/auth.pid
+
+      - name: Wait for auth-service
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf -X POST http://localhost:8180/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"health_user","password":"password"}' \
+              -o /dev/null; then
+              echo "auth-service ready"
+              break
+            fi
+            echo "Waiting for auth-service... ($i/40)"
+            sleep 3
+          done
+
+      - name: Run Locust performance test (headless, 60s)
+        run: |
+          locust -f tests/performance/locustfile.py \
+            --host=http://localhost:8180 \
+            --headless \
+            --users 20 \
+            --spawn-rate 5 \
+            --run-time 60s \
+            --csv=/tmp/locust-results \
+            --exit-code-on-error 1
+        env:
+          AUTH_HOST: http://localhost:8180
+          DASHBOARD_HOST: http://localhost:8084
+          GATEWAY_HOST: http://localhost:8087
+          FORM_HOST: http://localhost:8086
+
+      - name: Upload Locust results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locust-results
+          path: /tmp/locust-results*.csv
+          retention-days: 30
+
+      - name: Stop services and infrastructure
+        if: always()
+        run: |
+          kill $(cat /tmp/auth.pid) 2>/dev/null || true
+          docker compose -f docker-compose.dev.yml down
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: integration-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.dev.yml up -d postgres openldap
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker exec circleguard-postgres pg_isready -U admin -d circleguard && break
+            echo "Waiting for postgres... ($i/30)"
+            sleep 3
+          done
+
+      - name: Build auth-service JAR
+        run: ./gradlew :services:circleguard-auth-service:bootJar --no-daemon
+
+      - name: Start auth-service
+        run: |
+          java -jar services/circleguard-auth-service/build/libs/*.jar \
+            --server.port=8180 \
+            --spring.datasource.url=jdbc:postgresql://localhost:5432/circleguard_auth \
+            --spring.datasource.username=admin \
+            --spring.datasource.password=password \
+            --jwt.secret=my-super-secret-ci-key-32-chars-long!! \
+            --spring.ldap.urls=ldap://localhost:389 > /tmp/auth-zap.log 2>&1 &
+          echo $! > /tmp/auth-zap.pid
+
+      - name: Wait for auth-service
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf -X POST http://localhost:8180/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"health_user","password":"password"}' \
+              -o /dev/null; then
+              echo "auth-service ready for ZAP scan"
+              break
+            fi
+            echo "Waiting for auth-service... ($i/40)"
+            sleep 3
+          done
+
+      - name: Create ZAP rules file
+        run: |
+          mkdir -p .zap
+          cat > .zap/rules.tsv << 'EOF'
+          10202	IGNORE	(Private IP Disclosure)
+          10027	IGNORE	(Information Disclosure - Suspicious Comments)
+          EOF
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:8180'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-I -j'
+          artifact_name: 'zap-baseline-report'
+          issue_title: 'ZAP Baseline Scan - CircleGuard Auth Service'
+        continue-on-error: true
+
+      - name: Stop auth-service and infrastructure
+        if: always()
+        run: |
+          kill $(cat /tmp/auth-zap.pid) 2>/dev/null || true
+          docker compose -f docker-compose.dev.yml down
+
+  quality-check:
+    runs-on: ubuntu-latest
+    needs: [build, integration-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Verify JaCoCo coverage for all services
+        run: ./gradlew jacocoTestCoverageVerification
+
+  sonarqube:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Run tests with coverage
+        run: ./gradlew test jacocoTestReport --no-daemon
+
+      - name: SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: ./gradlew sonar --no-daemon
+
+  docker-build-scan:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, identity-service, promotion-service, notification-service, form-service, file-service, gateway-service, dashboard-service]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/circleguard-${{ matrix.service }}/Dockerfile
+          tags: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          load: true
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+      - name: Trivy scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, integration-test, quality-check, sonarqube, docker-build-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx --yes \
+            -p semantic-release@23 \
+            -p @semantic-release/git@10 \
+            -p @semantic-release/changelog@6 \
+            semantic-release
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://circleguard.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: echo "Deploying ${{ github.sha }} to production (gated by environment approval)"

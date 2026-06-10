@@ -1,0 +1,29 @@
+# Traffic generator. Continuously curls the apex backend Service so the
+# mesh has live traffic to secure (mTLS), split (canary), retry and chart
+# in the Linkerd Viz dashboard. Runs in the injected namespace, so its
+# calls go out through the linkerd2-proxy sidecar over mTLS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: circleguard-mesh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      containers:
+      - name: client
+        image: curlimages/curl:8.10.1
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          while true; do
+            curl -s http://backend.circleguard-mesh.svc.cluster.local/ || true
+            sleep 1
+          done

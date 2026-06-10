@@ -84,7 +84,9 @@ public class PromotionClient {
         if (lastSuccessCache != null) {
             Map cached = lastSuccessCache.getIfPresent(cacheKey);
             if (cached != null) {
-                dashboardMetrics.recordCacheHit();
+                if (dashboardMetrics != null) {
+                    dashboardMetrics.recordCacheHit();
+                }
                 log.warn("Promotion service unavailable. Returning cached data for key: {}", cacheKey);
                 Map<String, Object> result = new HashMap<>(cached);
                 result.put("cached", true);
@@ -92,7 +94,9 @@ public class PromotionClient {
                 return Map.copyOf(result);
             }
         }
-        dashboardMetrics.recordCacheMiss();
+        if (dashboardMetrics != null) {
+            dashboardMetrics.recordCacheMiss();
+        }
         log.warn("Promotion service unavailable. No cached data for key: {}", cacheKey);
         return Map.of("error", "Service unavailable", "cached", false);
     }

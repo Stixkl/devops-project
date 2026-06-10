@@ -25,6 +25,8 @@ resilience4j:
         minimum-number-of-calls: 10
 
 circleguard:
+  features:
+    department-stats-enabled: ${CIRCLEGUARD_FEATURES_DEPARTMENTSTATSENABLED:true}
   client:
     promotion-service:
       url: ${CIRCLEGUARD_CLIENT_PROMOTION_URL:http://localhost:8088}

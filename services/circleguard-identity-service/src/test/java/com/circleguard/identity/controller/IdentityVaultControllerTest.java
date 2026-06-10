@@ -34,6 +34,9 @@ class IdentityVaultControllerTest {
     @MockBean
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @MockBean
+    private com.circleguard.identity.observability.IdentityMetrics identityMetrics;
+
     @Test
     @WithMockUser(authorities = "identity:lookup")
     void lookupIdentity_WithPermission_ReturnsRealIdentity() throws Exception {

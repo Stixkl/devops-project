@@ -21,6 +21,9 @@ class FileUploadControllerTest {
     @MockBean
     private FileStorageService storageService;
 
+    @MockBean
+    private com.circleguard.file.observability.FileMetrics fileMetrics;
+
     @Test
     void shouldUploadFileSuccessfully() throws Exception {
         MockMultipartFile file = new MockMultipartFile(

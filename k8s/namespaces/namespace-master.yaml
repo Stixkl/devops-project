@@ -5,3 +5,7 @@ metadata:
   labels:
     environment: production
     team: circleguard
+  annotations:
+    # Enrola el namespace en el service mesh: el proxy-injector de Linkerd
+    # añade el sidecar a cada pod, habilitando mTLS y métricas automáticas.
+    linkerd.io/inject: enabled

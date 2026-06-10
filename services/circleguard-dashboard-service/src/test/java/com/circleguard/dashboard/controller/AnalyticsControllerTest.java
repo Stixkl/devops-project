@@ -23,6 +23,9 @@ class AnalyticsControllerTest {
     @MockBean
     private AnalyticsService analyticsService;
 
+    @MockBean
+    private com.circleguard.dashboard.observability.DashboardMetrics dashboardMetrics;
+
     @Test
     void shouldReturnHealthBoardStats() throws Exception {
         Map<String, Object> stats = new HashMap<>();

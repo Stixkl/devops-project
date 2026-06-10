@@ -27,6 +27,9 @@ class PriorityAlertListenerBroadcastTest {
     @Mock
     private NotificationDispatcher notificationDispatcher;
 
+    @Mock
+    private com.circleguard.notification.observability.NotificationMetrics notificationMetrics;
+
     @InjectMocks
     private PriorityAlertListener listener;
 

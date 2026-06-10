@@ -10,6 +10,7 @@ dependencies {
     testImplementation(platform("org.springframework.boot:spring-boot-dependencies:3.2.4"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("io.jsonwebtoken:jjwt-api:0.11.5")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
@@ -18,7 +19,5 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.zipkin.reporter2:zipkin-reporter-brave")
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
-    implementation("io.micrometer:micrometer-registry-logback")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("io.micrometer:micrometer-tracing-integration-test")
 }

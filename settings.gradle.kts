@@ -11,6 +11,10 @@ plugins {
 
 rootProject.name = "circleguard"
 
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+enableFeaturePreview("STABLE_CONFIGURATION_CACHE")
+
 // Shared Libraries (Commented out as folders are missing on disk)
 // include("libs:circleguard-common")
 // include("libs:circleguard-security")
@@ -25,4 +29,6 @@ include("services:circleguard-form-service")
 include("services:circleguard-file-service")
 include("services:circleguard-gateway-service")
 include("services:circleguard-dashboard-service")
+
+// Centralized cross-service tests
 include("tests:integration-tests")

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!-- Suppress false positives for Spring Boot test dependencies -->
+    <suppress>
+        <notes><![CDATA[
+            Spring Boot starter-test includes older versions of some libraries used only in tests.
+            These do not affect production.
+        ]]></notes>
+        <cve>CVE-*,CVE-2023-44487</cve>
+        <moduleName>org.springframework.boot:spring-boot-starter-test</moduleName>
+    </suppress>
+
+    <!-- Suppress known false positive for H2 database test usage -->
+    <suppress>
+        <notes><![CDATA[
+            H2 is only used for test databases (application-test.yml).
+            Not present in production runtime.
+        ]]></notes>
+        <cve>*</cve>
+        <moduleName>com.h2database:h2</moduleName>
+    </suppress>
+
+    <!-- Suppress Lombok (compileOnly) -->
+    <suppress>
+        <notes><![CDATA[
+            Lombok is compileOnly, does not ship in the final artifact.
+        ]]></notes>
+        <cve>*</cve>
+        <moduleName>org.projectlombok:lombok</moduleName>
+    </suppress>
+
+    <!-- Suppress Testcontainers (testRuntimeOnly) -->
+    <suppress>
+        <notes><![CDATA[
+            Testcontainers only used in tests, not in production.
+        ]]></notes>
+        <cve>*</cve>
+        <moduleName>org.testcontainers:*</moduleName>
+    </suppress>
+
+    <!-- Suppress WireMock (test only) -->
+    <suppress>
+        <notes><![CDATA[
+            WireMock used only for integration tests.
+        ]]></notes>
+        <cve>*</cve>
+        <moduleName>com.github.tomakehurst:wiremock-jre8</moduleName>
+    </suppress>
+</suppressions>

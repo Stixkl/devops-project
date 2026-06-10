@@ -23,6 +23,9 @@ class QuestionnaireControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.circleguard.form.observability.FormMetrics formMetrics;
+
     @MockBean
     private QuestionnaireService questionnaireService;
 

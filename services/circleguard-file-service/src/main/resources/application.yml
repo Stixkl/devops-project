@@ -52,3 +52,6 @@ management:
     http:
       server:
         exclude-patterns: /actuator/health/**,/actuator/health
+
+jwt:
+  secret: ${JWT_SECRET:my-super-secret-dev-key-32-chars-long-12345678}

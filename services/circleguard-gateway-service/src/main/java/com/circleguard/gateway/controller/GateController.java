@@ -17,6 +17,9 @@ public class GateController {
     @PostMapping("/validate")
     public ResponseEntity<QrValidationService.ValidationResult> validate(@RequestBody Map<String, String> request) {
         String token = request.get("token");
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         gatewayMetrics.recordValidation();
         QrValidationService.ValidationResult result = validationService.validateToken(token);
         if (result.valid()) {

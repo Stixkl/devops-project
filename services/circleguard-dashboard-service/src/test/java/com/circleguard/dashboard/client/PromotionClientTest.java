@@ -15,7 +15,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(classes = PromotionClient.class)
+@SpringBootTest(classes = {PromotionClient.class, com.circleguard.dashboard.observability.DashboardMetrics.class})
 @EnableAutoConfiguration(exclude = {
     DataSourceAutoConfiguration.class,
     DataSourceTransactionManagerAutoConfiguration.class,

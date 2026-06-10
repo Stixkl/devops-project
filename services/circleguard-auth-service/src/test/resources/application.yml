@@ -2,11 +2,17 @@ jwt:
   secret: "my-super-secret-test-key-32-chars-long"
   expiration: 3600000
 
+qr:
+  secret: "my-super-secret-test-key-32-chars-long"
+  expiration: 300
+
 spring:
   main:
     allow-bean-definition-overriding: true
+  flyway:
+    enabled: false
   datasource:
-    url: jdbc:h2:mem:testdb
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
     username: sa
     password: password

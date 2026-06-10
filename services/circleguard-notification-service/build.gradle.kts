@@ -10,6 +10,9 @@ dependencies {
     testImplementation(platform("org.springframework.boot:spring-boot-dependencies:3.2.4"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+    implementation("org.springframework.security:spring-security-core")
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("com.twilio.sdk:twilio:10.1.1")
@@ -25,8 +28,6 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.zipkin.reporter2:zipkin-reporter-brave")
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
-    implementation("io.micrometer:micrometer-registry-logback")
-    testImplementation("io.micrometer:micrometer-tracing-integration-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.wiremock:wiremock-standalone:3.9.1")
 }
