@@ -15,6 +15,9 @@ pipeline {
         SERVICE_NAME = getServiceName()
         DOCKER_IMAGE = "circleguard/${SERVICE_NAME}-service"
         RELEASE_VERSION = ''
+        INFRA_REPO = 'https://github.com/JuanAmor8/circleguard-infra.git'
+        INFRA_BRANCH = 'master'
+        INFRA_DIR = 'infra'
     }
 
     options {
@@ -29,6 +32,16 @@ pipeline {
                 checkout scm
                 script {
                     env.RELEASE_VERSION = getNextVersion()
+                    // Preservar el commit del repo de aplicacion antes del checkout de infra
+                    env.APP_COMMIT = env.GIT_COMMIT
+                }
+            }
+        }
+
+        stage('Checkout Infra') {
+            steps {
+                dir("${INFRA_DIR}") {
+                    git url: "${INFRA_REPO}", branch: "${INFRA_BRANCH}"
                 }
             }
         }
@@ -79,11 +92,11 @@ pipeline {
             steps {
                 sh """
                     kubectl config use-context docker-desktop || true
-                    kubectl apply -f k8s/namespaces/ -n circleguard-master 2>/dev/null || true
+                    kubectl apply -f infra/k8s/namespaces/ -n circleguard-master 2>/dev/null || true
                     # Substituir placeholders en configmaps y secrets antes de aplicar
-                    envsubst < k8s/master/configmaps.yaml | kubectl apply -f - -n circleguard-master || true
-                    envsubst < k8s/master/secrets.yaml | kubectl apply -f - -n circleguard-master || true
-                    kubectl apply -f k8s/master/ 2>/dev/null || true
+                    envsubst < infra/k8s/master/configmaps.yaml | kubectl apply -f - -n circleguard-master || true
+                    envsubst < infra/k8s/master/secrets.yaml | kubectl apply -f - -n circleguard-master || true
+                    kubectl apply -f infra/k8s/master/ 2>/dev/null || true
                     kubectl set image deployment/\${SERVICE_NAME}-service \
                         \${SERVICE_NAME}-service=\${DOCKER_IMAGE}:\${RELEASE_VERSION} \
                         -n circleguard-master 2>/dev/null || true

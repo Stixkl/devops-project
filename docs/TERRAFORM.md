@@ -4,7 +4,9 @@
 
 CircleGuard utiliza **Terraform** para provisionar la infraestructura base en Azure: específicamente, los clústeres AKS (Azure Kubernetes Service) para los entornos de desarrollo, staging y producción.
 
-**Objetivo**: Mantener los manifiestos Kubernetes (`k8s/*`) como la fuente de verdad para desplegar los microservicios, mientras que Terraform gestiona únicamente la infraestructura del clúster (red, nodos, etc.).
+> **Nota**: el código Terraform y los manifiestos Kubernetes viven en el repo separado [circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Clónalo junto a este repo: `git clone https://github.com/JuanAmor8/circleguard-infra.git`.
+
+**Objetivo**: Mantener los manifiestos Kubernetes (`circleguard-infra/k8s/*`) como la fuente de verdad para desplegar los microservicios, mientras que Terraform gestiona únicamente la infraestructura del clúster (red, nodos, etc.).
 
 ## Arquitectura Azure
 
@@ -44,7 +46,7 @@ Entorno PROD
 ## Estructura de módulos
 
 ```
-terraform/
+circleguard-infra/terraform/
 ├── main.tf                 # Instancia módulo aks-cluster 3 veces (dev, stage, prod)
 ├── variables.tf            # Variables globales (location, tags, subscription)
 ├── outputs.tf              # (vacío, outputs en módulo)
@@ -106,7 +108,7 @@ El estado de Terraform (`terraform.tfstate`) se almacena en **Azure Storage Acco
 Ejecutar `scripts/init-backend.sh` una sola vez:
 
 ```bash
-cd terraform
+cd circleguard-infra/terraform
 ./scripts/init-backend.sh
 ```
 
@@ -162,13 +164,14 @@ kubectl cluster-info
 
 ### 3. Desplegar aplicaciones
 
-Los manifests Kubernetes están en `k8s/dev`, `k8s/stage`, `k8s/master`. Ya no se ejecutan contra Minikube, sino contra el AKS:
+Los manifests Kubernetes están en `circleguard-infra/k8s/dev`, `k8s/stage`, `k8s/master`. Ya no se ejecutan contra Minikube, sino contra el AKS:
 
 ```bash
+cd circleguard-infra
 kubectl apply -f k8s/dev/ -n circleguard-dev
 ```
 
-Los pipelines Jenkins actuales ya usan `kubectl apply`; solo necesitan tener el `KUBECONFIG` apuntando al cluster correcto.
+Los pipelines Jenkins clonan `circleguard-infra` en `infra/` (stage "Checkout Infra") y ejecutan `kubectl apply -f infra/k8s/...`; solo necesitan tener el `KUBECONFIG` apuntando al cluster correcto.
 
 ### 4. Actualizar escalado
 
@@ -210,9 +213,10 @@ Los pipelines actuales (`jenkins/Jenkinsfile-*`) ya ejecutan `kubectl apply`. Pa
 3. En cada pipeline, la variable `KUBECONFIG` ya se usa (o se puede设置). Asegúrate de que el job cargue el archivo correcto:
    ```groovy
    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
-       sh 'kubectl apply -f k8s/dev/ -n circleguard-dev'
+       sh 'kubectl apply -f infra/k8s/dev/ -n circleguard-dev'
    }
    ```
+   (la ruta `infra/` proviene del stage "Checkout Infra", que clona el repo `circleguard-infra` dentro del workspace.)
 4. Opcionalmente, puedes eliminar la línea `kubectl config use-context docker-desktop` de los Jenkinsfiles, ya que no aplica en AKS.
 
 ## Troubleshooting

@@ -64,6 +64,26 @@ CircleGuard follows a **Microservice Architecture** built on a **Hybrid Data Mod
 
 ---
 
+## 📦 Repository Layout (Two Repos)
+
+CircleGuard is split across two repositories:
+
+| Repo | Contents |
+|:---|:---|
+| **devops-project** (this repo) | Application code (`services/`), Dockerfiles (`docker/`), `docker-compose.dev.yml`, CI workflows (`.github/workflows`), CD pipelines (`jenkins/`), tests (`tests/`), helper scripts (`scripts/`) and docs (`docs/`) |
+| **[circleguard-infra](https://github.com/JuanAmor8/circleguard-infra)** | Infrastructure as Code: `terraform/`, Kubernetes manifests (`k8s/`), `observability/`, `chaos/`, `multicloud/` and the `deploy-all` script |
+
+Clone them side-by-side:
+
+```bash
+git clone https://github.com/JuanAmor8/devops-project.git
+git clone https://github.com/JuanAmor8/circleguard-infra.git
+```
+
+The Jenkins pipelines in this repo perform a second checkout of `circleguard-infra` into `./infra/` during their Deploy stages, so deploy commands reference `infra/k8s/...` paths.
+
+---
+
 ## 🗺️ Roadmap
 
 ### Phase 1: MVP — The Intelligence Core (Current)

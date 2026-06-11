@@ -14,6 +14,9 @@ pipeline {
         DOCKER_REGISTRY = 'docker.io'
         SERVICE_NAME = getServiceName()
         DOCKER_IMAGE = "circleguard/${SERVICE_NAME}-service"
+        INFRA_REPO = 'https://github.com/JuanAmor8/circleguard-infra.git'
+        INFRA_BRANCH = 'master'
+        INFRA_DIR = 'infra'
     }
 
     options {
@@ -26,6 +29,18 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                script {
+                    // Preservar el commit del repo de aplicacion antes del checkout de infra
+                    env.APP_COMMIT = env.GIT_COMMIT
+                }
+            }
+        }
+
+        stage('Checkout Infra') {
+            steps {
+                dir("${INFRA_DIR}") {
+                    git url: "${INFRA_REPO}", branch: "${INFRA_BRANCH}"
+                }
             }
         }
 
@@ -67,11 +82,11 @@ pipeline {
             steps {
                 sh """
                     kubectl config use-context docker-desktop || true
-                    kubectl apply -f k8s/namespaces/ -n circleguard-stage 2>/dev/null || true
+                    kubectl apply -f infra/k8s/namespaces/ -n circleguard-stage 2>/dev/null || true
                     # Substituir placeholders en configmaps y secrets antes de aplicar
-                    envsubst < k8s/stage/configmaps.yaml | kubectl apply -f - -n circleguard-stage || true
-                    envsubst < k8s/stage/secrets.yaml | kubectl apply -f - -n circleguard-stage || true
-                    kubectl apply -f k8s/stage/ 2>/dev/null || true
+                    envsubst < infra/k8s/stage/configmaps.yaml | kubectl apply -f - -n circleguard-stage || true
+                    envsubst < infra/k8s/stage/secrets.yaml | kubectl apply -f - -n circleguard-stage || true
+                    kubectl apply -f infra/k8s/stage/ 2>/dev/null || true
                     kubectl set image deployment/\${SERVICE_NAME}-service \
                         \${SERVICE_NAME}-service=\${DOCKER_IMAGE}:stage-\${BUILD_NUMBER} \
                         -n circleguard-stage 2>/dev/null || true

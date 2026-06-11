@@ -28,9 +28,12 @@ kind que simulan los dos clouds), y comparativa de rendimiento/costos.
 
 ## 1. Despliegue en dos proveedores (IaC)
 
-- **Azure (activo)**: módulo `terraform/modules/aks-cluster` × 3 ambientes
+> Todas las rutas de este documento viven en el repo
+> [circleguard-infra](https://github.com/JuanAmor8/circleguard-infra).
+
+- **Azure (activo)**: módulo `circleguard-infra/terraform/modules/aks-cluster` × 3 ambientes
   (`terraform/main.tf`).
-- **GCP (respaldo)**: módulo espejo `terraform/modules/gke-cluster`
+- **GCP (respaldo)**: módulo espejo `circleguard-infra/terraform/modules/gke-cluster`
   (`google_container_cluster` + node pools con autoscaling y Spot, interfaz
   de variables equivalente a la del módulo AKS) instanciado en
   `terraform/multicloud.tf` como `gke_dr` (región `us-central1`), activable
@@ -43,7 +46,7 @@ kind que simulan los dos clouds), y comparativa de rendimiento/costos.
 
 Activo-pasivo con **respaldo cruzado de proveedor**:
 
-- `k8s/dr/velero-schedule.yaml`: backup diario (02:00 UTC, TTL 7d) de los
+- `circleguard-infra/k8s/dr/velero-schedule.yaml`: backup diario (02:00 UTC, TTL 7d) de los
   namespaces circleguard desde AKS hacia un **bucket GCS** — perder Azure no
   pierde también los respaldos.
 - Restauración en el sitio pasivo: `velero restore create --from-backup <id>`
@@ -55,7 +58,7 @@ Activo-pasivo con **respaldo cruzado de proveedor**:
 
 ## 3. Balanceo de carga entre proveedores (demo en vivo)
 
-Dos clusters kind simulan los clouds (`multicloud/kind-{azure,gcp}.yaml`),
+Dos clusters kind simulan los clouds (`circleguard-infra/multicloud/kind-{azure,gcp}.yaml`),
 cada uno corre el workload `gateway-echo` que se identifica con su cloud;
 HAProxy (`multicloud/haproxy.cfg`) balancea round-robin con health checks.
 
@@ -80,7 +83,7 @@ check (fall 2 × 2s) lo expulsa y el 100% va al otro cloud:
 {"cloud":"gcp"} {"cloud":"azure"} {"cloud":"gcp"} {"cloud":"azure"} ...
 ```
 
-Reproducción: `multicloud/README.md`. En producción este rol lo cumple Azure
+Reproducción: `circleguard-infra/multicloud/README.md`. En producción este rol lo cumple Azure
 Traffic Manager / GCP Cloud DNS con health checks equivalentes.
 
 ## 4. Comparativa entre clouds
@@ -108,7 +111,7 @@ gcp-sim:   promedio 212.3 ms (20 req)
 
 | Pieza | Ruta |
 |---|---|
-| Módulo GKE | `terraform/modules/gke-cluster/` |
-| Instancia DR | `terraform/multicloud.tf` |
-| Respaldo cruzado | `k8s/dr/velero-schedule.yaml` |
-| Demo balanceo | `multicloud/` (kind ×2 + HAProxy + README) |
+| Módulo GKE | `circleguard-infra/terraform/modules/gke-cluster/` |
+| Instancia DR | `circleguard-infra/terraform/multicloud.tf` |
+| Respaldo cruzado | `circleguard-infra/k8s/dr/velero-schedule.yaml` |
+| Demo balanceo | `circleguard-infra/multicloud/` (kind ×2 + HAProxy + README) |

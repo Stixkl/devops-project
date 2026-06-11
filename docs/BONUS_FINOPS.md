@@ -36,7 +36,7 @@ helm install opencost opencost/opencost -n opencost --create-namespace \
 Costo estimado mensual por ambiente (precios públicos Azure eastus,
 pay-as-you-go, 730 h/mes; AKS Free tier ⇒ control plane $0). Para cifras al
 día se deja cableado Infracost
-(`infracost breakdown --path terraform --terraform-var-file envs/<env>.tfvars`,
+(`infracost breakdown --path circleguard-infra/terraform --terraform-var-file envs/<env>.tfvars`,
 requiere API key gratuita):
 
 | Ambiente | Cómputo | Detalle | Discos (128 GB) | Otros | Total/mes |
@@ -48,7 +48,7 @@ requiere API key gratuita):
 
 ## 3. Políticas de ahorro implementadas (como código)
 
-1. **Spot instances** (`terraform/main.tf`, módulo `aks-cluster`): pool `burst`
+1. **Spot instances** (`circleguard-infra/terraform/main.tf`, módulo `aks-cluster`): pool `burst`
    de stage en `priority = "Spot"` con `spot_max_price = -1` y autoscaling
    **0→3** (scale-to-zero cuando no hay carga). Spot en Azure: hasta **-90%**
    vs on-demand (B2ms ~$60.74 → ~$6-18/mes por nodo).
@@ -59,7 +59,7 @@ requiere API key gratuita):
      de usuario tolerantes a evicción.
 2. **Autoscaling** en todos los pools de stage/prod (min/max declarados);
    dev con tamaño mínimo (2 × B2s burstable).
-3. **Scale-to-zero fuera de horario** (`terraform/scripts/aks-stop-start.sh`):
+3. **Scale-to-zero fuera de horario** (`circleguard-infra/terraform/scripts/aks-stop-start.sh`):
    `az aks stop/start` de dev y stage programable (L-V 20:00→07:00 + fines de
    semana). Un cluster detenido no factura cómputo. Ahorro ≈ **65%** del
    cómputo de no-producción: (~$61 + $182) × 0.65 ≈ **$158/mes**.
@@ -67,7 +67,7 @@ requiere API key gratuita):
    CPU para cargas con valles, 30-50% más baratas que las D-series
    equivalentes (D2s_v3 ≈ $70 vs B2ms ≈ $61 con el doble de RAM que B2s).
 5. **Retención acotada de observabilidad**: Prometheus 10d/40 GB
-   (`k8s/master/observability/helm-values-prometheus-stack.yaml`) e ILM en
+   (`circleguard-infra/k8s/master/observability/helm-values-prometheus-stack.yaml`) e ILM en
    Elasticsearch — el almacenamiento de métricas/logs no crece sin límite.
 6. **Etiquetado de costos**: `tags` (Project/Environment/ManagedBy) en todos
    los recursos Terraform → cost allocation por ambiente en Azure Cost
@@ -75,8 +75,9 @@ requiere API key gratuita):
 
 ## 4. Dashboard de costos y utilización
 
-`observability/grafana/dashboards/circleguard-costs.json` (uid `cg-costs`,
-provisionado automáticamente con el stack de `observability/`):
+`circleguard-infra/observability/grafana/dashboards/circleguard-costs.json` (uid `cg-costs`,
+provisionado automáticamente con el stack de `circleguard-infra/observability/`; el mismo
+directorio incluye además 8 dashboards por servicio en `dashboards/services/`, uid `cg-svc-<name>`):
 
 - Costo total del cluster USD/h y proyección mensual (`node_total_hourly_cost`).
 - Costo de CPU y RAM por namespace (asignación OpenCost).
@@ -87,7 +88,7 @@ provisionado automáticamente con el stack de `observability/`):
 
 | Hallazgo | Evidencia | Acción | Ahorro estimado |
 |---|---|---|---|
-| `cpuEff` 0.4–2.2% en cargas demo | OpenCost (§1) | Right-sizing de requests (los Deployments de `chaos/00-target-env.yaml` ya declaran requests ajustados) | hasta 50% del costo asignado |
+| `cpuEff` 0.4–2.2% en cargas demo | OpenCost (§1) | Right-sizing de requests (los Deployments de `circleguard-infra/chaos/00-target-env.yaml` ya declaran requests ajustados) | hasta 50% del costo asignado |
 | Cómputo no-prod 24/7 | Tabla §2 | `aks-stop-start.sh` programado | ~$158/mes |
 | Burst on-demand en stage | main.tf | Pool Spot 0-3 | ~$45-55/mes por nodo de ráfaga |
 | Spot mal ubicado en system pool | main.tf (corregido) | Spot solo en pools de usuario | evita downtime (costo de incidente) |
