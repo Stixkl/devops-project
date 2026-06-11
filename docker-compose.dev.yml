@@ -24,8 +24,8 @@ services:
       - "7687:7687"
       - "7474:7474"
     container_name: circleguard-neo4j
-    env_file:
-      - .env
+    # Sin env_file: el .env trae vars de servicios (p. ej. NEO4J_URI) que
+    # Neo4j 5 interpreta como settings de config y aborta el arranque.
     environment:
       NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
       NEO4J_PLUGINS: '["apoc"]'
