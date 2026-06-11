@@ -26,7 +26,7 @@
 `BRANCHING_STRATEGY.md`: `main` (prod) ← `release/*` (stage) ← `dev` ←
 `feat/*`, Conventional Commits, PRs obligatorios con revisión cruzada,
 versionado semántico automatizado (semantic-release en Actions, tags
-`vX.Y.Z` en Jenkins-master).
+`vX.Y.Z` generados por el job `release` de `ci.yml`).
 
 ## Iteración 1 — Fundamentos (Sprint 1)
 
@@ -38,7 +38,7 @@ versionado semántico automatizado (semantic-release en Actions, tags
 | HU-03 Branching | `BRANCHING_STRATEGY.md`, ramas dev/release/main activas |
 | HU-04 CI base | `.github/workflows/ci.yml` (build + unit tests por servicio) |
 | HU-05 Terraform base | `circleguard-infra/terraform/` con módulo `aks-cluster`, 3 ambientes, backend azurerm |
-| HU-06 Pipelines despliegue | `jenkins/Jenkinsfile-{dev,stage,master}` |
+| HU-06 Pipelines despliegue | `.github/workflows/cd-dev.yml`, `cd-stage.yml` y job `deploy-prod` de `ci.yml` |
 
 **Review**: demo de pipeline dev desplegando a Kubernetes local.
 **Retrospectiva** (acciones):
@@ -61,9 +61,9 @@ versionado semántico automatizado (semantic-release en Actions, tags
 **Review**: demo en vivo — mesh con mTLS, experimento de caos abriendo el
 circuit breaker, dashboard de costos.
 **Retrospectiva** (acciones):
-- *Mejorar*: dos líneas de trabajo paralelas (Actions vs Jenkins) divergieron
-  → merge de integración con política documentada y división de
-  responsabilidades CI/CD (`docs/PIPELINES.md`).
+- *Mejorar*: se mantenían dos motores CI/CD (Actions + Jenkins) en paralelo
+  → se consolidó todo en GitHub Actions (CI + CD con environments para los
+  gates de promoción), simplificando el mantenimiento (`docs/PIPELINES.md`).
 - *Aprendizaje*: el experimento de caos 1 falsó la hipótesis del fallback y
   destapó un bug real → "test in production-like" se adopta como práctica.
 

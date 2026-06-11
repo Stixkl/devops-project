@@ -8,7 +8,7 @@ PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
 cat > RELEASE_NOTES.md << EOF
 # Release Notes - ${VERSION}
 **Date:** ${DATE}  
-**Author:** Jenkins CI/CD Pipeline
+**Author:** GitHub Actions CI/CD (semantic-release)
 
 ## What's Changed
 

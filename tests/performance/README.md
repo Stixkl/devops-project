@@ -60,23 +60,21 @@ locust -f locust_stress_test.py --headless -u 500 -r 50 --run-time 5m --host htt
 | Error Rate | | | | |
 
 ## CI/CD Integration
-Add to Jenkins pipeline:
-```groovy
-stage('Performance Tests') {
-    steps {
-        dir('tests/performance') {
-            sh 'pip install -q locust'
-            sh 'locust -f locustfile.py --headless -u 100 -r 10 --run-time 5m --host http://stage-api --html report.html'
-        }
-    }
-    post {
-        always {
-            publishHTML target: [
-                reportDir: 'tests/performance',
-                reportFiles: 'report.html',
-                reportName: 'Performance Report'
-            ]
-        }
-    }
-}
+Las pruebas de rendimiento corren en GitHub Actions (job `performance-test` de `.github/workflows/ci.yml`). Equivalente mínimo:
+```yaml
+performance-test:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with: { python-version: '3.11' }
+    - run: pip install locust
+    - run: |
+        locust -f tests/performance/locustfile.py --headless \
+          -u 100 -r 10 --run-time 5m --host http://stage-api --html report.html
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-report
+        path: report.html
 ```

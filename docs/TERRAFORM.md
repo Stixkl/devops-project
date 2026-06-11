@@ -171,7 +171,7 @@ cd circleguard-infra
 kubectl apply -f k8s/dev/ -n circleguard-dev
 ```
 
-Los pipelines Jenkins clonan `circleguard-infra` en `infra/` (stage "Checkout Infra") y ejecutan `kubectl apply -f infra/k8s/...`; solo necesitan tener el `KUBECONFIG` apuntando al cluster correcto.
+Los workflows de CD clonan `circleguard-infra` en `infra/` (paso "Checkout infra repo") y ejecutan `kubectl apply -f infra/k8s/...`; solo necesitan tener el `KUBECONFIG` apuntando al cluster correcto.
 
 ### 4. Actualizar escalado
 
@@ -204,20 +204,23 @@ terraform destroy -var-file=envs/dev.tfvars
 
 *Precios orientativos; consulta Azure Pricing Calculator para valores exactos.*
 
-## Integración con Jenkins
+## Integración con GitHub Actions
 
-Los pipelines actuales (`jenkins/Jenkinsfile-*`) ya ejecutan `kubectl apply`. Para que apunten a AKS:
+Los workflows de CD (`.github/workflows/cd-dev.yml`, `cd-stage.yml` y el job `deploy-prod` de `ci.yml`) ya ejecutan `kubectl apply`. Para que apunten a AKS:
 
 1. Obtén el kubeconfig de cada cluster (como se describió arriba).
-2. En Jenkins, crea credenciales de tipo **Secret file** con el contenido del archivo `kubeconfig-dev.yaml`, `kubeconfig-stage.yaml`, `kubeconfig-prod.yaml`.
-3. En cada pipeline, la variable `KUBECONFIG` ya se usa (o se puede设置). Asegúrate de que el job cargue el archivo correcto:
-   ```groovy
-   withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
-       sh 'kubectl apply -f infra/k8s/dev/ -n circleguard-dev'
-   }
+2. Codifícalo en base64 y guárdalo como GitHub Secret por ambiente: `KUBE_CONFIG_DEV`, `KUBE_CONFIG_STAGE`, `KUBE_CONFIG_PROD`.
+   ```bash
+   base64 -w0 kubeconfig-dev.yaml   # pega el resultado en el secret KUBE_CONFIG_DEV
    ```
-   (la ruta `infra/` proviene del stage "Checkout Infra", que clona el repo `circleguard-infra` dentro del workspace.)
-4. Opcionalmente, puedes eliminar la línea `kubectl config use-context docker-desktop` de los Jenkinsfiles, ya que no aplica en AKS.
+3. Los workflows decodifican el secret a `~/.kube/config` y ejecutan, p. ej.:
+   ```yaml
+   - run: |
+       echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > ~/.kube/config
+       kubectl apply -f infra/k8s/dev/
+   ```
+   (la ruta `infra/` proviene del paso "Checkout infra repo", que clona `circleguard-infra` dentro del workspace.)
+4. Si el secret `KUBE_CONFIG_*` no está configurado, el job omite el despliegue al cluster con un warning (las imágenes se publican igualmente), útil para validar el pipeline sin un AKS activo.
 
 ## Troubleshooting
 

@@ -486,13 +486,107 @@ jobs:
     environment:
       name: production
       url: https://circleguard.example.com
+    env:
+      REGISTRY_USER: juanamor8
+      DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+      DB_URL: ${{ secrets.PROD_DB_URL }}
+      DB_USERNAME: ${{ secrets.PROD_DB_USERNAME }}
+      JWT_SECRET: ${{ secrets.PROD_JWT_SECRET }}
+      QR_SECRET: ${{ secrets.PROD_QR_SECRET }}
+      LDAP_URL: ${{ secrets.PROD_LDAP_URL }}
+      LDAP_BIND_DN: ${{ secrets.PROD_LDAP_BIND_DN }}
+      LDAP_BIND_PASSWORD: ${{ secrets.PROD_LDAP_BIND_PASSWORD }}
+      NEO4J_USERNAME: ${{ secrets.PROD_NEO4J_USERNAME }}
+      NEO4J_PASSWORD: ${{ secrets.PROD_NEO4J_PASSWORD }}
+      VAULT_SECRET: ${{ secrets.PROD_VAULT_SECRET }}
+      VAULT_SALT: ${{ secrets.PROD_VAULT_SALT }}
+      VAULT_HASH_SALT: ${{ secrets.PROD_VAULT_HASH_SALT }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.PROD_TWILIO_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.PROD_TWILIO_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ secrets.PROD_TWILIO_FROM }}
+      GOTIFY_TOKEN: ${{ secrets.PROD_GOTIFY_TOKEN }}
+      CORS_ORIGINS: ${{ vars.PROD_CORS_ORIGINS || 'https://circleguard.example.com' }}
+      MAIL_HOST: ${{ vars.PROD_MAIL_HOST || 'smtp.circleguard.edu' }}
+      MAIL_PORT: ${{ vars.PROD_MAIL_PORT || '587' }}
+      FILE_UPLOAD_DIR: ${{ vars.PROD_FILE_UPLOAD_DIR || 'uploads' }}
+      ENCOUNTER_WINDOW_DAYS: '14'
+      MANDATORY_FENCE_DAYS: '14'
+      AUTO_THRESHOLD_SECONDS: '3600'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Deploy to production
-        run: echo "Deploying ${{ github.sha }} to production (gated by environment approval)"
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: JuanAmor8/circleguard-infra
+          path: infra
+
+      - name: Resolve release version
+        id: version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${VERSION}"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push release images
+        run: |
+          for svc in auth identity gateway form notification promotion dashboard file; do
+            docker build -f services/circleguard-${svc}-service/Dockerfile \
+              -t ${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }} \
+              -t ${REGISTRY_USER}/circleguard-${svc}-service:latest .
+            docker push ${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }}
+            docker push ${REGISTRY_USER}/circleguard-${svc}-service:latest
+          done
+
+      - name: Configure kubeconfig
+        id: kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_PROD }}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::KUBE_CONFIG_PROD secret not set — skipping cluster deploy (images published)."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to production cluster
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl apply -f infra/k8s/namespaces/
+          envsubst < infra/k8s/master/configmaps.yaml | kubectl apply -f -
+          envsubst < infra/k8s/master/secrets.yaml | kubectl apply -f -
+          kubectl apply -f infra/k8s/master/
+          for svc in auth identity gateway form notification promotion dashboard file; do
+            kubectl set image deployment/${svc}-service \
+              ${svc}-service=${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }} \
+              -n circleguard-master || true
+            kubectl annotate deployment/${svc}-service \
+              kubernetes.io/change-cause="Release ${{ steps.version.outputs.version }}" \
+              --overwrite -n circleguard-master || true
+          done
+          for svc in auth identity gateway form notification promotion dashboard file; do
+            kubectl rollout status deployment/${svc}-service -n circleguard-master --timeout=300s || true
+          done
+
+      - name: Smoke test
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl get pods -n circleguard-master
+          kubectl port-forward svc/gateway-service 8087:8087 -n circleguard-master &
+          sleep 10
+          curl -sf http://localhost:8087/actuator/health || echo "::warning::gateway health check failed"
 
   # Notificación automática de fallos (rúbrica CI/CD): si cualquier job clave
   # falla, se abre/actualiza un issue con el enlace al run. No requiere

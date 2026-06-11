@@ -17,7 +17,7 @@ Antes de comenzar, verifica que todo está en su lugar:
 ```powershell
 # Verificar estructura (repo de aplicación)
 Get-ChildItem C:\Users\juanc\Videos\devops-project\docker
-Get-ChildItem C:\Users\juanc\Videos\devops-project\jenkins
+Get-ChildItem C:\Users\juanc\Videos\devops-project\.github\workflows
 Get-ChildItem C:\Users\juanc\Videos\devops-project\tests
 Get-ChildItem C:\Users\juanc\Videos\devops-project\scripts
 Get-ChildItem C:\Users\juanc\Videos\devops-project\docs
@@ -28,7 +28,7 @@ Get-ChildItem C:\Users\juanc\Videos\circleguard-infra\k8s
 
 Debes ver:
 - `docker/`: 6 Dockerfiles + docker-compose.yml
-- `jenkins/`: 3 Jenkinsfiles
+- `.github/workflows/`: `ci.yml` (CI + deploy a prod), `cd-dev.yml`, `cd-stage.yml`
 - `tests/`: integration-tests, e2e, performance
 - `scripts/`: 8 scripts
 - `docs/`: PIPELINES, TESTING_STRATEGY, PROJECT_OVERVIEW, architecture/
@@ -36,7 +36,7 @@ Debes ver:
 
 ---
 
-## B1. INSTALAR JENKINS + DOCKER + KUBERNETES
+## B1. INSTALAR DOCKER + KUBERNETES
 
 ### Opción recomendada (sin Docker Desktop - usa Minikube)
 
@@ -59,68 +59,48 @@ kubectl get nodes
 minikube status
 ```
 
-### 3. Instalar Jenkins en contenedor
-
-```powershell
-docker run -d --name jenkins `
-  -p 8080:8080 -p 50000:50000 `
-  -v jenkins_home:/var/jenkins_home `
-  -v //var/run/docker.sock:/var/run/docker.sock `
-  jenkins/jenkins:lts
-
-# Esperar a que esté listo
-docker logs jenkins
-# Busca el password inicial de administrador
-
-# Acceder a http://localhost:8080
-```
-
 ---
 
-## B2. CONFIGURAR JENKINS
+## B2. CONFIGURAR GITHUB ACTIONS (CD)
 
-### 1. Acceder a Jenkins
-Abre http://localhost:8080 y completa el setup inicial con el password del contenedor.
+El CD corre completamente en GitHub Actions (no hay que instalar nada localmente). Solo hay que configurar el repositorio una vez:
 
-### 2. Instalar plugins
-Ve a **Manage Jenkins → Manage Plugins → Available**:
-- Docker Pipeline
-- Kubernetes CLI
-- JUnit
-- HTML Publisher
-- Pipeline: Stage View
-- Git
+### 1. Crear Environments
+Ve a **Settings → Environments** del repo y crea:
 
-### 3. Agregar Credentials
-Ve a **Manage Jenkins → Manage Credentials → Add Credentials**:
+| Environment | Protección |
+|-------------|------------|
+| `dev` | — |
+| `stage` | — |
+| `production` | **Required reviewers** (gate de aprobación manual al deploy de prod) |
 
-| ID | Tipo | Valor |
-|----|------|-------|
-| `dockerhub-credentials` | Username/Password | Tu usuario y password de Docker Hub |
-| `kubeconfig-dev` | Secret File | Tu kubeconfig del cluster dev |
-| `kubeconfig-stage` | Secret File | Tu kubeconfig del cluster stage |
-| `kubeconfig-master` | Secret File | Tu kubeconfig del cluster master |
-| `DOCKER_USERNAME` | Secret Text | Tu usuario de Docker Hub |
-| `DOCKER_PASSWORD` | Secret Text | Tu password de Docker Hub |
+### 2. Agregar Secrets
+Ve a **Settings → Secrets and variables → Actions → New repository secret**:
 
-### 4. Crear Jobs Multibranch Pipeline
+| Secret | Valor |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | Tu usuario de Docker Hub |
+| `DOCKERHUB_TOKEN` | Token de acceso de Docker Hub |
+| `KUBE_CONFIG_DEV` | Kubeconfig del cluster dev en **base64** |
+| `KUBE_CONFIG_STAGE` | Kubeconfig del cluster stage en base64 |
+| `KUBE_CONFIG_PROD` | Kubeconfig del cluster prod en base64 |
+| `STAGE_*` | Valores de los secretos de stage: `DB_PASSWORD`, `JWT_SECRET`, `QR_SECRET`, `LDAP_BIND_PASSWORD`, `NEO4J_PASSWORD`, `VAULT_SECRET`, `VAULT_SALT`, `VAULT_HASH_SALT`, `TWILIO_SID/TOKEN/FROM`, `GOTIFY_TOKEN` |
+| `PROD_*` | Igual que stage, más `DB_URL`, `DB_USERNAME`, `LDAP_URL` (= `ldap://openldap-prod:389`), `LDAP_BIND_DN`, `NEO4J_USERNAME` |
 
-Para **cada servicio**, crea un nuevo item:
+> Si algún `KUBE_CONFIG_*` no está definido, el workflow publica las imágenes pero omite el deploy al cluster con un warning.
 
-1. **New Item** → nombre: `circleguard-auth-service-dev`
-2. Tipo: **Multibranch Pipeline**
-3. Branch Sources → **Add source** → Git:
-    - Repository URL: `https://github.com/JuanAmor8/devops-project.git`
-    - Credentials: (tu token GitHub o anonymous)
-4. Build Configuration → Mode: **by Jenkinsfile**
-   - Script Path: `jenkins/Jenkinsfile-dev`
-5. **Add Property**: `SERVICE_NAME` = `auth`
-6. Repetir para los otros 5 servicios:
-   - identity → `SERVICE_NAME` = `identity`
-   - form → `SERVICE_NAME` = `form`
-   - gateway → `SERVICE_NAME` = `gateway`
-   - notification → `SERVICE_NAME` = `notification`
-   - promotion → `SERVICE_NAME` = `promotion`
+### 3. Disparar los pipelines
+
+Cada despliegue se dispara con un push a la rama correspondiente:
+
+```powershell
+git push origin dev          # → cd-dev.yml: build+push (dev-<sha>) y deploy a circleguard-dev
+git push origin release/1.2  # → cd-stage.yml: build+push (stage-<run>) y deploy a circleguard-stage
+git push origin master       # → ci.yml: CI completo + semantic-release + deploy-prod
+                             #   (queda en espera hasta aprobar en el environment `production`)
+```
+
+El avance se sigue en la pestaña **Actions** del repo; los fallos de CD abren un issue con label `cd-failure`.
 
 ---
 
@@ -161,7 +141,7 @@ cd C:\Users\Administrator\Videos\circleguard-infra
 # Produce k8s/dev/sealed-secrets.yaml (cifrado, seguro de commitear)
 ```
 
-Stage y master siguen usando plantillas `envsubst` alimentadas por credenciales de Jenkins. Nota: la plantilla de secretos de master ahora incluye la clave `NEO4J_AUTH`, y la credencial `LDAP_URL` de Jenkins para prod debe ser `ldap://openldap-prod:389`.
+Stage y master siguen usando plantillas `envsubst` alimentadas por los secretos `STAGE_*`/`PROD_*` de GitHub Actions. Nota: la plantilla de secretos de master ahora incluye la clave `NEO4J_AUTH`, y el secret `PROD_LDAP_URL` debe ser `ldap://openldap-prod:389`.
 
 ### Despliegue
 
@@ -269,10 +249,10 @@ locust -f locust_stress_test.py --headless -u 500 -r 50 -t 5m --host http://loca
 New-Item -ItemType Directory -Force -Path C:\Users\Administrator\Videos\devops-project\docs\screenshots
 
 # Capturas necesarias:
-# 1. Jenkins - Jobs Multibranch Pipeline
-# 2. Jenkins - Pipeline DEV ejecutándose (console output)
-# 3. Jenkins - Pipeline STAGE ejecutándose
-# 4. Jenkins - Pipeline MASTER ejecutándose
+# 1. GitHub Actions - pestaña Actions con los workflows (ci.yml, cd-dev.yml, cd-stage.yml)
+# 2. GitHub Actions - run de cd-dev.yml ejecutándose (logs del job deploy-dev)
+# 3. GitHub Actions - run de cd-stage.yml ejecutándose
+# 4. GitHub Actions - job deploy-prod con el gate de aprobación del environment production
 # 5. K8s - kubectl get pods -n circleguard-dev
 # 6. K8s - kubectl get pods -n circleguard-stage
 # 7. K8s - kubectl get pods -n circleguard-master
@@ -293,7 +273,7 @@ Sigue el guion en `docs/VIDEO_SCRIPT.md`. Herramientas recomendadas:
 
 Estructura del video (≤8 minutos):
 - 0:00-0:30 → Intro + arquitectura
-- 0:30-1:30 → Setup Jenkins/Docker/K8s
+- 0:30-1:30 → Setup Docker/K8s + configuración GitHub Actions
 - 1:30-3:00 → Pipeline DEV
 - 3:00-4:30 → Tests (unit + integration + E2E + performance)
 - 4:30-6:00 → Pipeline STAGE
@@ -308,7 +288,7 @@ Estructura del video (≤8 minutos):
 cd C:\Users\Administrator\Videos\devops-project
 
 # Crear ZIP con todos los artefactos
-Compress-Archive -Path docker,jenkins,tests,scripts,docs -DestinationPath circleguard-taller2-entrega.zip -Force
+Compress-Archive -Path docker,.github,tests,scripts,docs -DestinationPath circleguard-taller2-entrega.zip -Force
 # (los manifiestos k8s viven en el repo circleguard-infra)
 
 # Verificar tamaño
@@ -328,8 +308,8 @@ Antes de entregar, verifica cada punto de la rúbrica:
 
 | Punto | % | Verificación |
 |-------|---|--------------|
-| 1 | 10% | Jenkins instalado, Docker funcionando, K8s corriendo |
-| 2 | 15% | 6 jobs Multibranch Pipeline creados en Jenkins |
+| 1 | 10% | Docker funcionando, K8s corriendo, workflows de Actions configurados |
+| 2 | 15% | Workflows CD (cd-dev, cd-stage, deploy-prod) ejecutando en Actions |
 | 3 | 30% | Unit tests pasan, 8 integration tests, 23 E2E tests, Locust report |
 | 4 | 15% | Pipeline STAGE ejecuta en K8s stage |
 | 5 | 15% | Pipeline MASTER ejecuta, Release Notes generadas, git tag creado |
@@ -340,8 +320,9 @@ Antes de entregar, verifica cada punto de la rúbrica:
 ## COMANDOS ÚTILES DE DEBUG
 
 ```powershell
-# Ver logs de Jenkins
-docker logs jenkins -f
+# Ver logs de un run de GitHub Actions (requiere gh CLI)
+gh run list --limit 10
+gh run view --log
 
 # Ver pods con más detalle
 kubectl describe pods -n circleguard-dev
@@ -379,10 +360,10 @@ minikube start --driver=virtualbox --cpus=4 --memory=8g
 
 3. **Si los tests de integración fallan** porque los servicios no están corriendo, es esperado. El objetivo es que compilen y la estructura esté correcta.
 
-4. **Para el video**, puedes usar builds anteriores de Jenkins como evidencia en lugar de ejecutar todo en vivo (si el tiempo es corto).
+4. **Para el video**, puedes usar runs anteriores de GitHub Actions como evidencia en lugar de ejecutar todo en vivo (si el tiempo es corto).
 
 ---
 
 **Generado:** 2026-05-09
 **Versión:** 1.0
-**Para:** Circle Guard Taller 2 - CI/CD con Jenkins, Docker y Kubernetes
+**Para:** Circle Guard Taller 2 - CI/CD con GitHub Actions, Docker y Kubernetes
