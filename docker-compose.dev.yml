@@ -29,8 +29,6 @@ services:
     environment:
       NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
       NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_dbms_connector_bolt_listen__address: :7687
-      NEO4J_dbms_connector_bolt_advertised__address: :7687
     volumes:
       - neo4jdata:/data
     networks:

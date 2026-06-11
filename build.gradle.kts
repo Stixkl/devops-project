@@ -114,5 +114,6 @@ subprojects {
         failBuildOnCVSS = 7.0f
         format = "HTML"
         outputDirectory = "${project.layout.buildDirectory.get()}/reports/dependency-check"
+        nvd.apiKey = System.getenv("NVD_API_KEY")
     }
 }
