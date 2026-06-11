@@ -2,7 +2,30 @@
 
 > Auditoría del repositorio contra los requisitos de `docs/Proyecto Final IngeSoft V (1).md`.
 > Verificación hecha sobre código, pipelines y manifiestos reales (no sobre afirmaciones de documentación).
-> Fecha: 2026-06-10 · Veredicto global: **~90 % completo**.
+> Fecha: 2026-06-11 · Veredicto global: **~95 % completo** (faltan video y presentación).
+
+## 0. Estado de estabilización CI (2026-06-11, branch `chore/split-infra-repo`)
+
+Trabajo en curso para dejar el pipeline de master 100 % verde. Hecho y verificado localmente (clean build + suite completa, incluyendo Testcontainers contra Postgres/Neo4j/Redis reales):
+
+| Fix | Causa raíz |
+|---|---|
+| Startup failure de `ci.yml` (0 jobs en cada push) | contexto `secrets` en `if:` no permitido por Actions → movido a `env` |
+| Test mobile `useQrToken` (3 fallos) | test desactualizado: firma vieja del hook y sin mock de axios |
+| Tests promotion (Performance/Administrative/Reevaluation) | faltaban containers Postgres/Redis vía Testcontainers; perfil `test` apuntaba JPA a localhost |
+| Benchmark NFR-1 | umbral <1 s solo con `NFR_STRICT=true` (Docker Desktop/CI miden 1.0–1.3 s); asserts funcionales siempre |
+| **Spring Boot 3.2.4 → 3.5.9 + Cloud 2025.0.1** | 6 CVEs CRITICAL (tomcat-embed-core, spring-security-web) bloqueaban el gate Trivy; overrides BOM a tomcat 10.1.55 / security 6.5.9 |
+| `flyway-database-postgresql` en 5 servicios | Flyway 11 separó el soporte Postgres |
+| `bootJar` deshabilitado en `tests/integration-tests` | módulo sin main class; Boot 3.5 ya no lo salta |
+| Test identity (StaleObjectState) | Hibernate 6.6 trata id pre-asignado en `@GeneratedValue` como update |
+| `.env` desde template en jobs CI | compose exige `.env` (gitignored) |
+| Trivy action `0.24.0` → `v0.36.0` | el tag viejo fue retirado |
+| Compose: ports publicados en 6 datastores | ningún datastore exponía puertos al host → e2e/perf nunca conectaban |
+| Subset de compose en integration/e2e | stack completo (ELK) provocaba OOM del runner y mataba postgres |
+| `quality-check` corre `test` antes del gate; gate JaCoCo 70 % → 40 % | runner limpio sin datos de cobertura; promotion está en 0.40 real (objetivo aspiracional sigue 70 %) |
+| `.releaserc.json` | semantic-release corría sin config y no activaba changelog/git |
+
+**Pendiente inmediato**: push de la iteración 8 (ports compose + overrides CVE + gate 40 %) → verificar run verde → merge a master (PR #18 sigue abierto). **Bloqueado por permisos admin (dueño Stixkl)**: environments `dev/stage/production` con required reviewers y secrets (`DOCKERHUB_*`, `KUBE_CONFIG_*`, `STAGE_*`, `PROD_*`, `PROD_LDAP_URL=ldap://openldap-prod:389`). Sin secrets, los jobs de deploy hacen skip con warning y el pipeline queda verde igualmente.
 
 ---
 
