@@ -10,6 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service: [auth-service, identity-service, promotion-service, notification-service, form-service, gateway-service, file-service, dashboard-service, mobile]
 
