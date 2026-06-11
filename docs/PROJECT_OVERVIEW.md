@@ -33,8 +33,8 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 | Contenedores | Docker (multi-stage: `gradle:8.7-jdk21` → `eclipse-temurin:21-jre-alpine`) |
 | Orquestación | Kubernetes (AKS) · 3 namespaces (`circleguard-dev/stage/master`) |
 | Service Mesh | Linkerd (mTLS, canary 90/10, retries, circuit breaking) |
-| CI | GitHub Actions |
-| CD | Jenkins (3 pipelines: dev / stage / master) |
+| CI | GitHub Actions (`.github/workflows/ci.yml`) |
+| CD | GitHub Actions (`cd-dev.yml`, `cd-stage.yml` y job `deploy-prod` de `ci.yml` con aprobación manual) |
 | Registro | Docker Hub (`juanamor8/circleguard-*`) |
 | IaC | Terraform sobre Azure (AKS, VNets, ACR, backend remoto en Azure Storage) |
 | Observabilidad | Prometheus · Grafana · Alertmanager · ELK (Elasticsearch/Logstash/Kibana) · Filebeat · Jaeger (OTLP) |
@@ -93,7 +93,7 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 - **Datastores por entorno**: dev, stage (kafka, zookeeper, neo4j, redis, openldap con `emptyDir`) y master (kafka-prod, zookeeper-prod, neo4j-prod, redis-prod, openldap-prod con PVCs).
 - **Ingress + TLS**: NGINX Ingress → `gateway-service`, certificados Let's Encrypt vía cert-manager (`circleguard-infra/k8s/master/ingress/`). Único servicio expuesto; el resto ClusterIP.
 - **Service Mesh (Linkerd, `circleguard-infra/k8s/mesh/`)**: mTLS automático, circuit breaker (failure accrual), canary 90/10 con Gateway API HTTPRoute, retry policies con budget.
-- **Secretos**: dev usa Bitnami Sealed Secrets (`k8s/dev/sealed-secrets.yaml`, cifrado y commiteable); stage/master usan plantillas `envsubst` con credenciales de Jenkins.
+- **Secretos**: dev usa Bitnami Sealed Secrets (`k8s/dev/sealed-secrets.yaml`, cifrado y commiteable); stage/master usan plantillas `envsubst` alimentadas por los GitHub Secrets `STAGE_*`/`PROD_*`.
 
 ### 4.3 Terraform / Azure (`circleguard-infra/terraform/`)
 
@@ -104,24 +104,27 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 
 ---
 
-## 5. CI/CD — Arquitectura dual
+## 5. CI/CD — Todo en GitHub Actions
 
-### GitHub Actions — CI (`.github/workflows/ci.yml`)
+### CI (`.github/workflows/ci.yml`)
 
 Trigger: push a `dev`/`master`, PR a `dev`. Jobs:
 - Build en matriz (9 módulos) + pruebas unitarias + cobertura JaCoCo (upload a Codecov)
 - Pruebas de integración (docker-compose) y E2E (Cypress contra API real)
 - Pruebas de performance (Locust: 50 usuarios, 5 min)
-- Escaneo de seguridad: OWASP Dependency Check + Trivy
-- `semantic-release`: CHANGELOG automático por commits convencionales
+- Escaneo de seguridad: OWASP Dependency Check + ZAP + SonarQube + Trivy (`docker-build-scan`)
+- `semantic-release` (job `release`): CHANGELOG + GitHub Release + tag `vX.Y.Z`
+- `notify-failure`: abre un issue en GitHub si el pipeline falla
 
-### Jenkins — CD (`jenkins/`)
+### CD (workflows de GitHub Actions)
 
-| Pipeline | Trigger | Destino | Stages clave |
-|----------|---------|---------|--------------|
-| `Jenkinsfile-dev` | push develop/master | `circleguard-dev` | Build → Unit Tests → Security Scan → Docker Build → Trivy → Push → Deploy → Smoke |
-| `Jenkinsfile-stage` | `release/*` o manual | `circleguard-stage` | Build → Deploy → Integración → E2E → Performance → **Approval Gate** |
-| `Jenkinsfile-master` | push master | `circleguard-master` | Build → Scans paralelos (OWASP+Trivy) → Push `:VERSION`+`latest` → Deploy → Smoke → Release Notes → Git Tag |
+| Pipeline | Trigger | Environment / Destino | Pasos clave |
+|----------|---------|----------------------|-------------|
+| `cd-dev.yml` | push a `dev` | `dev` / `circleguard-dev` | Build+Push matrix 8 servicios (`dev-<sha>`, `dev-latest`) → checkout infra → `kubectl apply` → set image → rollout → Smoke |
+| `cd-stage.yml` | push a `release/**` | `stage` / `circleguard-stage` | Build+Push (`stage-<run_number>`) → envsubst configmaps/secrets (`STAGE_*`) → Deploy → Smoke |
+| `deploy-prod` (job de `ci.yml`) | push a `master` | `production` (**aprobación manual** con required reviewers) / `circleguard-master` | Versión del último tag (semantic-release) → Push `:<version>`+`latest` → envsubst (`PROD_*`) → Deploy → rollout con change-cause → Smoke |
+
+Si el secret `KUBE_CONFIG_<ENV>` no está definido, el deploy al cluster se omite con un warning (las imágenes igual se publican). Los fallos de CD abren un issue con label `cd-failure`.
 
 ---
 
@@ -143,7 +146,7 @@ Alertas definidas (`circleguard-infra/observability/prometheus/alert-rules.yml`)
 - **Integración**: `tests/integration-tests` contra stack docker-compose.
 - **E2E**: Cypress sobre la API.
 - **Performance**: Locust (50 usuarios concurrentes, 5 min).
-- **Smoke**: post-deploy en cada pipeline Jenkins.
+- **Smoke**: post-deploy en cada workflow de CD (dev, stage y prod).
 
 Detalle en `docs/TESTING_STRATEGY.md`.
 
@@ -202,8 +205,7 @@ devops-project/                # Repo de aplicación (este repo)
 │   └── circleguard-*-service/
 ├── docker/                    # Dockerfiles multi-stage + filebeat
 ├── docker-compose.dev.yml     # Stack local completo
-├── jenkins/                   # Jenkinsfile-dev | -stage | -master (clonan infra en ./infra/)
-├── .github/workflows/         # CI (GitHub Actions)
+├── .github/workflows/         # CI + CD (ci.yml, cd-dev.yml, cd-stage.yml)
 ├── tests/                     # Integración, E2E, performance
 ├── scripts/                   # Scripts de soporte
 └── docs/                      # Documentación + architecture/
@@ -219,4 +221,4 @@ circleguard-infra/             # Repo de infraestructura
 └── scripts/                   # deploy-all.sh, seal-dev-secrets.sh
 ```
 
-Los Jenkinsfiles de este repo hacen un segundo checkout de `circleguard-infra` en `./infra/` durante los stages de Deploy, por lo que los comandos de despliegue usan rutas `infra/k8s/...`.
+Los workflows de GitHub Actions de este repo hacen un segundo `actions/checkout` de `circleguard-infra` en `./infra/` durante los jobs de Deploy, por lo que los comandos de despliegue usan rutas `infra/k8s/...`.

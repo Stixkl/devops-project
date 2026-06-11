@@ -1,106 +1,104 @@
 # Pipelines CI/CD - Circle Guard
 
-## Arquitectura dual: GitHub Actions (CI) + Jenkins (CD)
+## Arquitectura: todo en GitHub Actions (CI + CD)
 
-El proyecto usa **dos motores complementarios**, no redundantes:
+El proyecto ejecuta **CI y CD en GitHub Actions**, con workflows separados por
+responsabilidad:
 
-| Capa | Motor | Responsabilidad | Definición |
-|------|-------|-----------------|------------|
-| **CI** | GitHub Actions | Build, unit/integración, calidad (SonarQube, JaCoCo), seguridad (OWASP DC, Trivy, ZAP), performance (Locust), release notes automáticas (semantic-release), notificación de fallos (issue + Slack) | `.github/workflows/ci.yml` (12 jobs) |
-| **CD** | Jenkins | Despliegue multi-ambiente con promoción controlada dev → stage → prod, gate de aprobación manual a producción, smoke tests post-deploy, tagging de release, notificación de fallos por mail | `jenkins/Jenkinsfile-{dev,stage,master}` |
+| Capa | Workflow | Responsabilidad |
+|------|----------|-----------------|
+| **CI** | `.github/workflows/ci.yml` | Build matrix, unit/integración/E2E/performance, calidad (SonarQube, JaCoCo), seguridad (OWASP DC, ZAP, Trivy en `docker-build-scan`), release notes automáticas (semantic-release, job `release`), notificación de fallos (`notify-failure` crea un issue) |
+| **CD dev** | `.github/workflows/cd-dev.yml` | Push a `dev` → build+push de imágenes y despliegue a K8s DEV |
+| **CD stage** | `.github/workflows/cd-stage.yml` | Push a `release/**` → build+push y despliegue a K8s STAGE |
+| **CD prod** | job `deploy-prod` de `ci.yml` | Push a `master` → despliegue a producción, gateado por el environment `production` (aprobación manual con required reviewers) |
 
-Razón del diseño: Actions corre en cada push sin infraestructura propia y
-centraliza el feedback de calidad en el PR; Jenkins vive junto a los clusters
-y gobierna la promoción entre ambientes (credenciales de despliegue nunca
-salen de la red del cluster). Un fallo en CI bloquea el merge; un fallo en CD
-bloquea la promoción y dispara el plan de rollback
-(`docs/CHANGE_MANAGEMENT.md`).
+Razón del diseño: un solo motor elimina la divergencia entre dos líneas de
+trabajo, centraliza el feedback de calidad en el PR y gobierna la promoción
+entre ambientes con **GitHub Environments** (secretos por ambiente, gate de
+aprobación en producción). Un fallo en CI bloquea el merge; un fallo en CD
+abre un issue (`notify-failure`, label `cd-failure`) y dispara el plan de
+rollback (`docs/CHANGE_MANAGEMENT.md`).
 
 ## Dual checkout: app + infra
 
 Los manifiestos Kubernetes viven en el repo separado
-[circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Cada
-Jenkinsfile tiene un stage **Checkout Infra** que clona ese repo dentro del
-workspace en `infra/`; los comandos de despliegue usan rutas `infra/k8s/...`
-(p. ej. `kubectl apply -f infra/k8s/dev/ -n circleguard-dev`). Así el código
-de aplicación y la infraestructura versionan por separado pero se despliegan
-juntos.
+[circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Los jobs
+de deploy hacen un segundo `actions/checkout` con `repository:
+JuanAmor8/circleguard-infra` y `path: infra`, de modo que los comandos de
+despliegue usan rutas `infra/k8s/...` (p. ej. `kubectl apply -f
+infra/k8s/dev/ -n circleguard-dev`). Así el código de aplicación y la
+infraestructura versionan por separado pero se despliegan juntos.
 
 ## Arquitectura de Pipelines
 
 ```
 Git Repository
     │
-    ├── [develop] ──→ Jenkinsfile-dev ──→ Docker Image ──→ K8s DEV
+    ├── [dev] ──→ cd-dev.yml ──→ Docker Images (dev-<sha>, dev-latest) ──→ K8s DEV
     │
-    ├── [release/*] ──→ Jenkinsfile-stage ──→ Docker Image ──→ K8s STAGE
-    │                                    └── Integration + E2E + Performance Tests
+    ├── [release/*] ──→ cd-stage.yml ──→ Docker Images (stage-<run>) ──→ K8s STAGE
+    │                                └── Integration + E2E + Performance (ci.yml)
     │
-    └── [master] ──→ Jenkinsfile-master ──→ Docker Image ──→ K8s PROD
-                                               └── Release Notes + Git Tag
+    └── [master] ──→ ci.yml (release + deploy-prod) ──→ Docker Images (<version>, latest) ──→ K8s PROD
+                         └── semantic-release: CHANGELOG + GitHub Release + tag vX.Y.Z
+                         └── Aprobación manual (environment `production`)
 ```
 
-## Pipeline DEV (jenkins/Jenkinsfile-dev)
+## Mapeo rama → ambiente
 
-**Trigger**: push a `develop` o `master`
+| Rama | Workflow | Environment | Namespace K8s | Tags de imagen | Gate |
+|------|----------|-------------|---------------|----------------|------|
+| `dev` | `cd-dev.yml` | `dev` | `circleguard-dev` | `dev-<sha>`, `dev-latest` | automático |
+| `release/**` | `cd-stage.yml` | `stage` | `circleguard-stage` | `stage-<run_number>` | automático |
+| `master` | `ci.yml` (`deploy-prod`) | `production` | `circleguard-master` | `<version>` (del tag semver), `latest` | **aprobación manual** (required reviewers) |
 
-| Stage | Descripción |
-|-------|-------------|
-| Checkout | Descarga código fuente |
-| Checkout Infra | Clona `circleguard-infra` en `infra/` |
-| Build & Compile | `./gradlew :services:circleguard-<svc>-service:build -x test` |
-| Unit Tests | `./gradlew test` + JUnit reports |
-| Security Scan | OWASP Dependency Check |
-| Docker Build | Construye imagen con Dockerfile.<service> |
-| Docker Security Scan | Trivy image scan |
-| Push to Registry | docker push a Docker Hub |
-| Deploy to Dev K8s | `kubectl apply -f infra/k8s/dev/` en namespace `circleguard-dev` |
-| Smoke Tests | Health check del deployment |
+## Pipeline DEV (.github/workflows/cd-dev.yml)
 
-**Variables de entorno**:
-- `SERVICE_NAME`: auth, identity, gateway, form, notification, promotion
-- `DOCKER_IMAGE`: circleguard/${SERVICE_NAME}
-- `KUBECONFIG`: credencial kubeconfig-dev
+**Trigger**: push a `dev`
 
-## Pipeline STAGE (jenkins/Jenkinsfile-stage)
+| Job | Descripción |
+|-----|-------------|
+| `build-push` | Matrix de 8 servicios; construye cada imagen y publica en Docker Hub con tags `dev-<sha>` y `dev-latest` |
+| `deploy-dev` | Environment `dev`; checkout de `circleguard-infra` en `infra/`; `kubectl apply -f infra/k8s/dev/`; `kubectl set image` por servicio; rollout status; smoke test. Si el secret `KUBE_CONFIG_DEV` no está definido, el despliegue al cluster se omite con un warning (las imágenes igual se publican) |
+| `notify-failure` | Abre un issue de GitHub con label `cd-failure` si el pipeline falla |
 
-**Trigger**: push a branch `release/*` o manual
+## Pipeline STAGE (.github/workflows/cd-stage.yml)
 
-| Stage | Descripción |
-|-------|-------------|
-| Checkout | Descarga código fuente |
-| Checkout Infra | Clona `circleguard-infra` en `infra/` |
-| Build | `./gradlew build` completo |
-| Docker Build | Imagen con tag `stage-${BUILD_NUMBER}` |
-| Push to Registry | docker push |
-| Deploy to Stage K8s | `kubectl apply -f infra/k8s/stage/` en namespace `circleguard-stage` (incluye datastores: kafka, zookeeper, neo4j, redis, openldap) |
-| Integration Tests | `./gradlew :tests:integration-tests:test` |
-| E2E Tests (Cypress) | `npx cypress run` contra APIs |
-| Performance Tests (Locust) | locust headless 100 users, 5 min |
-| Approval Gate | Aprobación manual antes de producción |
+**Trigger**: push a branch `release/**`
 
-**Credenciales requeridas**:
-- `kubeconfig-stage`
-- `DOCKER_USERNAME`, `DOCKER_PASSWORD`
+Mismo patrón que dev, con diferencias:
 
-## Pipeline MASTER (jenkins/Jenkinsfile-master)
+- Tags de imagen: `stage-<run_number>`.
+- Renderiza configmaps/secrets de stage con `envsubst` a partir de los
+  secretos `STAGE_*` de GitHub.
+- Environment `stage`; kubeconfig en el secret `KUBE_CONFIG_STAGE` (si no
+  está definido, se omite el deploy al cluster).
+- Despliega `infra/k8s/stage/` en namespace `circleguard-stage` (incluye
+  datastores: kafka, zookeeper, neo4j, redis, openldap).
+- Las pruebas de integración, E2E (Cypress) y performance (Locust) corren en
+  `ci.yml` sobre la misma rama.
 
-**Trigger**: push a `master`
+## Pipeline PROD (job `deploy-prod` de .github/workflows/ci.yml)
 
-| Stage | Descripción |
-|-------|-------------|
-| Checkout | Descarga + genera versión semver |
-| Checkout Infra | Clona `circleguard-infra` en `infra/` |
-| Build | `./gradlew clean build` (excluye integration/e2e) |
-| Docker Build | Tags: `${RELEASE_VERSION}` + `latest` |
-| Security Scan (parallel) | OWASP + Trivy |
-| Push to Registry | docker push ambas tags |
-| Deploy to Production K8s | `kubectl apply -f infra/k8s/master/` en `circleguard-master` (incluye datastores `*-prod` con PVCs) |
-| Smoke Tests | curl health endpoint |
-| Generate Release Notes | `scripts/generate-release-notes.sh` |
-| Tag & Notify | git tag + archivado |
+**Trigger**: push a `master` (tras pasar el CI completo y el job `release`)
 
-**Versiones**: El pipeline calcula automáticamente la siguiente versión semver desde el último tag git.
+| Paso | Descripción |
+|------|-------------|
+| Gate de aprobación | El job usa el environment `production`, configurado con required reviewers → el deploy queda en espera hasta aprobación manual |
+| Resolver versión | Toma la versión del último tag git (`vX.Y.Z`, creado por semantic-release) |
+| Build & Push | Construye y publica las imágenes release `juanamor8/circleguard-<svc>-service:<version>` y `:latest` |
+| Checkout Infra | `actions/checkout` de `JuanAmor8/circleguard-infra` en `infra/` |
+| Render config | `envsubst` sobre `infra/k8s/master/{configmaps,secrets}.yaml` con los secretos `PROD_*` |
+| Deploy | `kubectl apply -f infra/k8s/master/` en `circleguard-master` (incluye datastores `*-prod` con PVCs); `kubectl set image` por servicio con anotación change-cause |
+| Verificación | `kubectl rollout status` + smoke test (health endpoint) |
+
+Si el secret `KUBE_CONFIG_PROD` no está definido, el despliegue al cluster se
+omite con un warning; las imágenes release igual se publican.
+
+**Versiones**: semantic-release (job `release` de `ci.yml`) calcula la
+siguiente versión semver desde los commits convencionales, actualiza el
+CHANGELOG, crea el GitHub Release y el tag `vX.Y.Z`.
+`scripts/generate-release-notes.sh` queda solo como fallback manual.
 
 ## Diagrama de Flujo (ASCII)
 
@@ -111,52 +109,48 @@ Git Repository
                       │ git push
           ┌───────────┼───────────┐
           │           │           │
-       develop     release/*    master
+         dev      release/*    master
           │           │           │
           ▼           ▼           ▼
-    ┌──────────┐ ┌──────────┐ ┌──────────┐
-    │  DEV     │ │  STAGE   │ │  MASTER  │
-    │ PIPELINE │ │ PIPELINE │ │ PIPELINE │
-    └────┬─────┘ └────┬─────┘ └────┬─────┘
+    ┌──────────┐ ┌──────────┐ ┌──────────────┐
+    │ cd-dev   │ │ cd-stage │ │ ci.yml       │
+    │ .yml     │ │ .yml     │ │ (CI completo)│
+    └────┬─────┘ └────┬─────┘ └────┬─────────┘
          │            │            │
          ▼            ▼            ▼
-    ┌─────────┐  ┌──────────┐ ┌──────────┐
-    │  K8s    │  │ Integration│ │  K8s    │
-    │  DEV    │  │ + E2E + Perf│ │  PROD   │
-    └─────────┘  └────┬─────┘ └────┬─────┘
-                      │            │
-                 Approval?     Release Notes
-                      │            │
-                      │         ┌──┴──┐
-                      │         │ TAG │
-                      │         └─────┘
-                      │
-                  ┌───┴───┐
-                  │ MERGE │
-                  └───────┘
+    ┌─────────┐  ┌──────────┐  semantic-release
+    │  K8s    │  │  K8s     │  (tag vX.Y.Z)
+    │  DEV    │  │  STAGE   │       │
+    └─────────┘  └────┬─────┘       ▼
+                      │       Approval (env
+                 Integration   `production`)
+                 + E2E + Perf       │
+                  (ci.yml)          ▼
+                      │        ┌──────────┐
+                  ┌───┴───┐    │  K8s     │
+                  │ MERGE │    │  PROD    │
+                  └───────┘    └──────────┘
 ```
 
-## Credentials en Jenkins
+## Configuración requerida en GitHub
 
-Crear en Jenkins → Manage Credentials:
+### Environments (Settings → Environments)
 
-| ID | Tipo | Descripción |
-|----|------|-------------|
-| `dockerhub-credentials` | Username/Password | Docker Hub login |
-| `kubeconfig-dev` | Secret file | Kubeconfig para namespace dev |
-| `kubeconfig-stage` | Secret file | Kubeconfig para namespace stage |
-| `kubeconfig-master` | Secret file | Kubeconfig para namespace master |
-| `LDAP_URL` | Secret text | URL de LDAP por entorno; en prod debe ser `ldap://openldap-prod:389` |
+| Environment | Uso | Protección |
+|-------------|-----|------------|
+| `dev` | `cd-dev.yml` → job `deploy-dev` | — |
+| `stage` | `cd-stage.yml` → job de deploy | — |
+| `production` | `ci.yml` → job `deploy-prod` | **Required reviewers** (gate de aprobación manual) |
+
+### Secrets (Settings → Secrets and variables → Actions)
+
+| Secret | Descripción |
+|--------|-------------|
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Login a Docker Hub |
+| `KUBE_CONFIG_DEV` / `KUBE_CONFIG_STAGE` / `KUBE_CONFIG_PROD` | Kubeconfig en base64 por ambiente; si falta, el deploy al cluster se omite con warning |
+| `STAGE_*` | Valores para `envsubst` de los secretos de stage: `DB_PASSWORD`, `JWT_SECRET`, `QR_SECRET`, `LDAP_BIND_PASSWORD`, `NEO4J_PASSWORD`, `VAULT_SECRET`, `VAULT_SALT`, `VAULT_HASH_SALT`, `TWILIO_SID/TOKEN/FROM`, `GOTIFY_TOKEN` |
+| `PROD_*` | Igual que stage, más `DB_URL`, `DB_USERNAME`, `LDAP_URL` (debe ser `ldap://openldap-prod:389`), `LDAP_BIND_DN`, `NEO4J_USERNAME` |
 
 Los secretos de stage/master se generan en deploy con plantillas `envsubst`
-alimentadas por estas credenciales (la plantilla de master incluye la clave
-`NEO4J_AUTH`); dev usa Sealed Secrets (ver repo infra).
-
-## Multibranch Pipeline Configuration
-
-1. New Item → Multibranch Pipeline
-2. Branch Sources → Git
-3. Project Recognizer → by Jenkinsfile path: `jenkins/Jenkinsfile-dev`
-4. Behaviors → Add `Discover branches`
-5. Build Configuration → Mode: by Jenkinsfile
-6. Add Property: `SERVICE_NAME=<service-name>`
+alimentadas por estos secretos de GitHub (la plantilla de master incluye la
+clave `NEO4J_AUTH`); dev usa Sealed Secrets (ver repo infra).

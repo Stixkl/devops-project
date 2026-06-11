@@ -10,7 +10,7 @@ Todo cambio sigue el mismo camino; lo que varía es el nivel de aprobación:
 | Tipo | Ejemplos | Aprobación | Camino |
 |------|----------|-----------|--------|
 | **Estándar** | feature, fix, docs | 1 revisor (PR) | feat/* → dev → release/* → main |
-| **Normal (prod)** | despliegue a producción | Gate manual en Jenkins (`input`, submitters: devops-team, qa-team) + environment `production` protegido en Actions | release/* → main |
+| **Normal (prod)** | despliegue a producción | Environment `production` de GitHub con **required reviewers**: el job `deploy-prod` queda en espera hasta aprobación manual | release/* → main |
 | **Emergencia** | hotfix de incidente | 1 revisor + notificación a oncall; retro post-mortem obligatoria | hotfix/* → main (cherry-pick a dev) |
 
 Etapas del cambio (automatizadas en los pipelines):
@@ -22,21 +22,21 @@ Etapas del cambio (automatizadas en los pipelines):
 4. **Implementación**: despliegue por pipeline (nunca manual), con
    `kubectl annotate ... kubernetes.io/change-cause="release vX.Y.Z"` para
    trazabilidad del rollout.
-5. **Verificación**: smoke tests post-deploy (`curl /actuator/health` en
-   Jenkinsfile-master) + monitoreo de alertas 30 min.
+5. **Verificación**: smoke tests post-deploy (`curl /actuator/health` en el
+   job `deploy-prod` de `ci.yml`) + monitoreo de alertas 30 min.
 6. **Cierre o rollback** (ver §3).
 
 ## 2. Release notes y etiquetado automáticos
 
 - **GitHub Actions** (`ci.yml`, job `release`): `semantic-release` calcula la
   versión desde los Conventional Commits, genera changelog/release notes y
-  publica el tag + GitHub Release en cada push a `main`.
-- **Jenkins** (`Jenkinsfile-master`): calcula `RELEASE_VERSION`
-  (`getNextVersion()` sobre el último tag), genera `RELEASE_NOTES.md`
-  (`scripts/generate-release-notes.sh`), lo archiva como artefacto y crea el
-  tag anotado `vX.Y.Z` (`git tag -a && git push origin`).
-- Las imágenes Docker quedan etiquetadas con la misma versión
-  (`circleguard/<svc>:${RELEASE_VERSION}`) → correlación release ↔ artefacto.
+  publica el tag `vX.Y.Z` + GitHub Release en cada push a la rama de
+  producción. `scripts/generate-release-notes.sh` queda solo como fallback
+  manual.
+- El job `deploy-prod` resuelve la versión desde ese último tag y las
+  imágenes Docker quedan etiquetadas con la misma versión
+  (`juanamor8/circleguard-<svc>-service:<version>` + `:latest`) →
+  correlación release ↔ artefacto.
 
 ## 3. Planes de rollback
 
@@ -50,8 +50,9 @@ kubectl rollout undo deployment/<svc> -n circleguard-master
 kubectl rollout undo deployment/<svc> -n circleguard-master --to-revision=N
 ```
 Las probes de readiness garantizan que la versión restaurada no recibe
-tráfico hasta estar sana. Si el fallo es de release completa: re-ejecutar
-Jenkinsfile-master fijando `RELEASE_VERSION` al tag anterior.
+tráfico hasta estar sana. Si el fallo es de release completa: re-desplegar el
+tag anterior con `kubectl set image` (las imágenes versionadas permanecen en
+Docker Hub) o re-ejecutar el job `deploy-prod` sobre el tag previo.
 
 ### Base de datos
 Migraciones Flyway **aditivas** (no se borran columnas en el mismo release
@@ -72,8 +73,8 @@ manuales en el portal.
 
 ## 4. Disparadores de rollback
 
-- Smoke test post-deploy falla (automático: el pipeline queda FAILED y
-  notifica — mail Jenkins / issue + Slack en Actions).
+- Smoke test post-deploy falla (automático: el workflow queda FAILED y
+  notifica — issue con label `cd-failure` + Slack en Actions).
 - Alerta crítica sostenida >5 min tras release (`ServiceDown`,
   `HighErrorRate`, `CircuitBreakerOpen` — Prometheus rules).
 - Decisión del oncall durante la ventana de verificación.

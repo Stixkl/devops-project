@@ -1,0 +1,124 @@
+name: CD - Dev
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-dev
+  cancel-in-progress: false
+
+env:
+  INFRA_REPO: JuanAmor8/circleguard-infra
+  REGISTRY_USER: juanamor8
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, identity-service, promotion-service, notification-service, form-service, file-service, gateway-service, dashboard-service]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check registry credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DOCKERHUB_TOKEN not set — building image without pushing."
+          fi
+
+      - name: Login to Docker Hub
+        if: steps.creds.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/circleguard-${{ matrix.service }}/Dockerfile
+          tags: |
+            ${{ env.REGISTRY_USER }}/circleguard-${{ matrix.service }}:dev-${{ github.sha }}
+            ${{ env.REGISTRY_USER }}/circleguard-${{ matrix.service }}:dev-latest
+          push: ${{ steps.creds.outputs.push }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: build-push
+    environment:
+      name: dev
+    steps:
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: JuanAmor8/circleguard-infra
+          path: infra
+
+      - name: Configure kubeconfig
+        id: kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_DEV }}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::KUBE_CONFIG_DEV secret not set — skipping cluster deploy (build/push completed)."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to dev cluster
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl apply -f infra/k8s/namespaces/
+          kubectl apply -f infra/k8s/dev/
+          for svc in auth identity gateway form notification promotion dashboard file; do
+            kubectl set image deployment/${svc}-service \
+              ${svc}-service=${REGISTRY_USER}/circleguard-${svc}-service:dev-${{ github.sha }} \
+              -n circleguard-dev || true
+          done
+          for svc in auth identity gateway form notification promotion dashboard file; do
+            kubectl rollout status deployment/${svc}-service -n circleguard-dev --timeout=120s || true
+          done
+
+      - name: Smoke test
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl get pods -n circleguard-dev
+          kubectl port-forward svc/gateway-service 8087:8087 -n circleguard-dev &
+          sleep 5
+          curl -sf http://localhost:8087/actuator/health || echo "::warning::gateway health check failed"
+
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [build-push, deploy-dev]
+    if: failure()
+    permissions:
+      issues: write
+    steps:
+      - name: Open issue with failure details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `CD-dev failure (${context.sha.substring(0,7)})`,
+              labels: ['cd-failure'],
+              body: `El despliegue a DEV falló.\n\n- **Run**: ${runUrl}\n- **Commit**: ${context.sha}\n- **Autor**: @${context.actor}\n\nRollback: \`kubectl rollout undo deployment/<svc>-service -n circleguard-dev\` (docs/CHANGE_MANAGEMENT.md).`
+            });

@@ -1,6 +1,6 @@
 # Release Notes - v1.0.0
 **Date:** 2026-05-10  
-**Author:** Jenkins CI/CD Pipeline
+**Author:** GitHub Actions CI/CD (semantic-release)
 
 ## What's Changed
 

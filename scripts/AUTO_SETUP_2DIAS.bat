@@ -73,9 +73,6 @@ choco install git -y --force >nul 2>&1
 echo     - Docker CLI...
 choco install docker-cli -y --force >nul 2>&1
 
-echo     - Jenkins...
-choco install jenkins -y --force >nul 2>&1
-
 echo.
 echo     Refrescando entorno...
 refreshenv >nul 2>&1
@@ -199,24 +196,6 @@ if exist "k8s\namespaces" (
 echo.
 
 REM ==========================================
-REM PASO 9: INICIAR JENKINS
-REM ==========================================
-echo =============================================
-echo PASO 9: Iniciando Jenkins...
-echo =============================================
-
-echo     Verificando servicio Jenkins...
-sc query Jenkins >nul 2>&1
-if %errorlevel% neq 0 (
-    echo     [WARN] Jenkins no esta instalado como servicio
-    echo           Instalar con: choco install jenkins -y
-) else (
-    net start Jenkins >nul 2>&1
-    echo     [OK] Jenkins iniciado
-)
-echo.
-
-REM ==========================================
 REM FIN
 REM ==========================================
 echo.
@@ -226,20 +205,16 @@ echo ################################################################
 echo.
 echo LO SIGUIENTE:
 echo.
-echo 1. ABRE JENKINS: http://localhost:8080
+echo 1. CI/CD en GitHub Actions (.github/workflows): ci.yml, cd-dev.yml, cd-stage.yml
+echo    Configura Environments (dev/stage/production) y Secrets en GitHub.
 echo.
-echo 2. OBTENER CONTRASEÑA:
-echo    powershell -Command "Get-Content C:\ProgramData\Jenkins\.jenkins\secrets\initialAdminPassword"
-echo.
-echo 3. INSTALAR PLUGINS: Docker Pipeline, Kubernetes CLI
-echo.
-echo 4. VER EL DASHBOARD K8S:
+echo 2. VER EL DASHBOARD K8S:
 echo    minikube dashboard
 echo.
-echo 5. VER ESTADO:
+echo 3. VER ESTADO:
 echo    kubectl get pods -n circleguard-dev
 echo.
-echo 6. PARA CONSTRUIR DOCKER:
+echo 4. PARA CONSTRUIR DOCKER:
 echo    minikube docker-env ^|^| Invoke-Expression
 echo    docker build -t circleguard/auth-service:latest .
 echo.

@@ -105,7 +105,7 @@ gcp-sim:   promedio 212.3 ms (20 req)
 | Spot/preemptible | hasta -90% | hasta -91% |
 | Autoscaling | cluster-autoscaler gestionado | node auto-provisioning (más granular) |
 | Versiones k8s | canal manual/auto | release channels (REGULAR usado en el módulo) |
-| Veredicto | activo (ecosistema del proyecto: ACR, AAD RBAC, Jenkins) | pasivo DR (nodos ~20% más baratos + Spot agresivo → DR barato) |
+| Veredicto | activo (ecosistema del proyecto: ACR, AAD RBAC, GitHub Actions CD) | pasivo DR (nodos ~20% más baratos + Spot agresivo → DR barato) |
 
 ## Archivos
 
