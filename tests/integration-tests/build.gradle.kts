@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.2.4"))
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.5.9"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-test")
     implementation("org.springframework.kafka:spring-kafka-test")
@@ -23,3 +23,8 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Test-only module: there is no application main class, so the Boot
+// packaging tasks must not run.
+tasks.named("bootJar") { enabled = false }
+tasks.named("jar") { enabled = true }

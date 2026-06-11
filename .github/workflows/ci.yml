@@ -73,7 +73,9 @@ jobs:
       - name: Start infrastructure
         run: |
           cp .env.template .env
-          docker compose -f docker-compose.dev.yml up -d
+          # Datastores only — the observability stack is not needed for the
+          # integration tests and overloads the shared runner.
+          docker compose -f docker-compose.dev.yml up -d postgres redis zookeeper kafka neo4j openldap
 
       - name: Wait for services to be ready
         run: |
@@ -120,15 +122,21 @@ jobs:
       - name: Start infrastructure
         run: |
           cp .env.template .env
-          docker compose -f docker-compose.dev.yml up -d
+          # Only the datastores the services need — the full stack (ELK,
+          # Prometheus, Jaeger...) exhausts the shared runner's memory and
+          # gets postgres OOM-killed mid-run.
+          docker compose -f docker-compose.dev.yml up -d postgres redis zookeeper kafka neo4j openldap
 
       - name: Wait for Postgres
         run: |
           for i in $(seq 1 30); do
-            docker exec circleguard-postgres pg_isready -U admin -d circleguard && break
+            if docker exec circleguard-postgres pg_isready -U admin -d circleguard; then
+              exit 0
+            fi
             echo "Waiting for postgres... ($i/30)"
             sleep 3
           done
+          echo "Postgres never became ready"; docker ps -a; exit 1
 
       - name: Start core services
         run: bash scripts/ci-start-services.sh
@@ -376,7 +384,7 @@ jobs:
           cache: gradle
 
       - name: Verify JaCoCo coverage for all services
-        run: ./gradlew jacocoTestCoverageVerification
+        run: ./gradlew test jacocoTestCoverageVerification
 
   sonarqube:
     runs-on: ubuntu-latest
