@@ -390,10 +390,15 @@ jobs:
         run: ./gradlew test jacocoTestReport --no-daemon
 
       - name: SonarQube analysis
+        if: ${{ secrets.SONAR_TOKEN != '' }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: ./gradlew sonar --no-daemon
+
+      - name: SonarQube skipped notice
+        if: ${{ secrets.SONAR_TOKEN == '' }}
+        run: echo "::warning::SONAR_TOKEN not set — skipping SonarQube analysis."
 
   docker-build-scan:
     runs-on: ubuntu-latest
@@ -532,7 +537,18 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Release version: ${VERSION}"
 
+      - name: Check registry credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DOCKERHUB_TOKEN not set — building release images without pushing."
+          fi
+
       - name: Login to Docker Hub
+        if: steps.creds.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -544,8 +560,10 @@ jobs:
             docker build -f services/circleguard-${svc}-service/Dockerfile \
               -t ${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }} \
               -t ${REGISTRY_USER}/circleguard-${svc}-service:latest .
-            docker push ${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }}
-            docker push ${REGISTRY_USER}/circleguard-${svc}-service:latest
+            if [ "${{ steps.creds.outputs.push }}" = "true" ]; then
+              docker push ${REGISTRY_USER}/circleguard-${svc}-service:${{ steps.version.outputs.version }}
+              docker push ${REGISTRY_USER}/circleguard-${svc}-service:latest
+            fi
           done
 
       - name: Configure kubeconfig

@@ -27,7 +27,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Check registry credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DOCKERHUB_TOKEN not set — building image without pushing."
+          fi
+
       - name: Login to Docker Hub
+        if: steps.creds.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -41,7 +52,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY_USER }}/circleguard-${{ matrix.service }}:dev-${{ github.sha }}
             ${{ env.REGISTRY_USER }}/circleguard-${{ matrix.service }}:dev-latest
-          push: true
+          push: ${{ steps.creds.outputs.push }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
