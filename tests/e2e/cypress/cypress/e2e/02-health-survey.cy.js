@@ -7,7 +7,7 @@ describe('E2E - Health Survey Flow (API)', () => {
       method: 'POST',
       url: `${formService}/api/v1/surveys`,
       body: {
-        userId: 'user-test-' + Date.now(),
+        anonymousId: crypto.randomUUID(),
         responses: {
           fever: 'NO',
           cough: 'NO',
@@ -26,7 +26,7 @@ describe('E2E - Health Survey Flow (API)', () => {
       method: 'POST',
       url: `${formService}/api/v1/surveys`,
       body: {
-        userId: 'user-symptom-' + Date.now(),
+        anonymousId: crypto.randomUUID(),
         responses: {
           fever: 'YES',
           cough: 'NO'
@@ -60,20 +60,21 @@ describe('E2E - Health Survey Flow (API)', () => {
   });
 
   it('TC_E2E_010: End-to-end: Login -> Submit Survey -> Status Reported', () => {
-    const anonymousId = 'e2e-' + Date.now();
-    
+    const anonymousId = crypto.randomUUID();
+
     cy.request({
       method: 'POST',
       url: `${authService}/api/v1/auth/visitor/handoff`,
       body: { anonymousId },
       failOnStatusCode: false
     }).then(handoff => {
+      expect(handoff.status).to.be.oneOf([200, 401]);
       if (handoff.status === 200) {
         cy.request({
           method: 'POST',
           url: `${formService}/api/v1/surveys`,
           body: {
-            userId: anonymousId,
+            anonymousId,
             responses: { fever: 'YES', cough: 'YES' },
             submittedAt: Date.now()
           },

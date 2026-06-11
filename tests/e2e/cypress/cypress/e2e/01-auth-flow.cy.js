@@ -55,7 +55,8 @@ describe('E2E - Auth Flow (API)', () => {
   });
 
   it('TC_E2E_005: Full flow: visitor handoff -> anonymous token obtained', () => {
-    const anonymousId = 'test-anon-' + Date.now();
+    // anonymousId must be a UUID — the API rejects any other format with 400
+    const anonymousId = crypto.randomUUID();
     cy.request({
       method: 'POST',
       url: `${authService}/api/v1/auth/visitor/handoff`,

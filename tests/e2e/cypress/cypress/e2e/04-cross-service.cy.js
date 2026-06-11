@@ -8,25 +8,20 @@ describe('E2E - Cross-Service Integration (API)', () => {
 
   it('TC_E2E_016: All 6 services respond to health checks', () => {
     const services = [authService, identityService, gatewayService, formService, notificationService, promotionService];
-    const checks = [];
-    
-    services.forEach(baseUrl => {
-      checks.push(
-        cy.request({ method: 'GET', url: `${baseUrl}/actuator/health`, failOnStatusCode: false })
-          .then(res => ({ service: baseUrl, status: res.status }))
-      );
-    });
 
-    cy.wrap(Promise.all(checks)).then(results => {
-      results.forEach(r => {
-        expect(r.status).to.be.oneOf([200, 503]);
-      });
+    // cy.request returns Cypress chainables, not Promises — Promise.all over
+    // them yields undefined entries. Let Cypress queue the checks serially.
+    services.forEach(baseUrl => {
+      cy.request({ method: 'GET', url: `${baseUrl}/actuator/health`, failOnStatusCode: false })
+        .then(res => {
+          expect(res.status, `${baseUrl}/actuator/health`).to.be.oneOf([200, 503]);
+        });
     });
   });
 
   it('TC_E2E_017: Full flow: Login -> Identity -> Form -> Gate', () => {
-    const anonId = 'cross-' + Date.now();
-    
+    const anonId = crypto.randomUUID();
+
     cy.request({
       method: 'POST',
       url: `${authService}/api/v1/auth/visitor/handoff`,
@@ -39,7 +34,7 @@ describe('E2E - Cross-Service Integration (API)', () => {
         cy.request({
           method: 'POST',
           url: `${formService}/api/v1/surveys`,
-          body: { userId: anonId, responses: { q1: 'NO' }, submittedAt: Date.now() },
+          body: { anonymousId: anonId, responses: { q1: 'NO' }, submittedAt: Date.now() },
           failOnStatusCode: false
         }).then(formRes => {
           expect(formRes.status).to.be.oneOf([200, 201, 401]);

@@ -42,4 +42,12 @@ class HealthSurveyControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").exists());
     }
+
+    @Test
+    void shouldRejectSurveyWithoutAnonymousId() throws Exception {
+        mockMvc.perform(post("/api/v1/surveys")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\": \"user-test-1\", \"responses\": {\"fever\": \"NO\"}}"))
+                .andExpect(status().isBadRequest());
+    }
 }

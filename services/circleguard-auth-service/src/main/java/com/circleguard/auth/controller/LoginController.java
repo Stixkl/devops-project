@@ -85,7 +85,13 @@ public class LoginController {
             return ResponseEntity.badRequest().build();
         }
 
-        UUID anonymousId = UUID.fromString(anonymousIdStr);
+        UUID anonymousId;
+        try {
+            anonymousId = UUID.fromString(anonymousIdStr);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "anonymousId must be a valid UUID"));
+        }
 
         Authentication visitorAuth = new UsernamePasswordAuthenticationToken(
                 anonymousIdStr,

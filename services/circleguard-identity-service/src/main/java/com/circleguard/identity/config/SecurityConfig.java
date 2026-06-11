@@ -37,6 +37,8 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/identities/visitor", "/api/v1/identities/map").permitAll()
+                // k8s liveness/readiness probes and CI health checks hit these unauthenticated
+                .requestMatchers("/actuator/health/**", "/actuator/health", "/actuator/info").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions
