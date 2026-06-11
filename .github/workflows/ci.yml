@@ -10,6 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service: [auth-service, identity-service, promotion-service, notification-service, form-service, gateway-service, file-service, dashboard-service, mobile]
 
@@ -70,7 +71,11 @@ jobs:
           cache: gradle
 
       - name: Start infrastructure
-        run: docker compose -f docker-compose.dev.yml up -d
+        run: |
+          cp .env.template .env
+          # Datastores only — the observability stack is not needed for the
+          # integration tests and overloads the shared runner.
+          docker compose -f docker-compose.dev.yml up -d postgres redis zookeeper kafka neo4j openldap
 
       - name: Wait for services to be ready
         run: |
@@ -115,15 +120,23 @@ jobs:
           node-version: '20'
 
       - name: Start infrastructure
-        run: docker compose -f docker-compose.dev.yml up -d
+        run: |
+          cp .env.template .env
+          # Only the datastores the services need — the full stack (ELK,
+          # Prometheus, Jaeger...) exhausts the shared runner's memory and
+          # gets postgres OOM-killed mid-run.
+          docker compose -f docker-compose.dev.yml up -d postgres redis zookeeper kafka neo4j openldap
 
       - name: Wait for Postgres
         run: |
           for i in $(seq 1 30); do
-            docker exec circleguard-postgres pg_isready -U admin -d circleguard && break
+            if docker exec circleguard-postgres pg_isready -U admin -d circleguard; then
+              exit 0
+            fi
             echo "Waiting for postgres... ($i/30)"
             sleep 3
           done
+          echo "Postgres never became ready"; docker ps -a; exit 1
 
       - name: Start core services
         run: bash scripts/ci-start-services.sh
@@ -153,6 +166,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     continue-on-error: true
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
     steps:
       - name: Checkout code
@@ -165,13 +180,23 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Cache NVD database
+        if: env.NVD_API_KEY != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-data-${{ runner.os }}
+
       - name: Run OWASP Dependency Check
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        if: env.NVD_API_KEY != ''
         run: ./gradlew dependencyCheckAggregate --no-daemon
 
+      - name: Dependency Check skipped notice
+        if: env.NVD_API_KEY == ''
+        run: echo "::warning::NVD_API_KEY not set — skipping OWASP Dependency Check (the NVD rate-limits anonymous downloads with 403). Get a free key at https://nvd.nist.gov/developers/request-an-api-key"
+
       - name: Upload Dependency Check reports
-        if: always()
+        if: always() && env.NVD_API_KEY != ''
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-reports
@@ -202,7 +227,9 @@ jobs:
         run: pip install locust==2.24.0
 
       - name: Start infrastructure
-        run: docker compose -f docker-compose.dev.yml up -d postgres openldap
+        run: |
+          cp .env.template .env
+          docker compose -f docker-compose.dev.yml up -d postgres openldap
 
       - name: Wait for Postgres
         run: |
@@ -289,7 +316,9 @@ jobs:
           cache: gradle
 
       - name: Start infrastructure
-        run: docker compose -f docker-compose.dev.yml up -d postgres openldap
+        run: |
+          cp .env.template .env
+          docker compose -f docker-compose.dev.yml up -d postgres openldap
 
       - name: Wait for Postgres
         run: |
@@ -367,7 +396,7 @@ jobs:
           cache: gradle
 
       - name: Verify JaCoCo coverage for all services
-        run: ./gradlew jacocoTestCoverageVerification
+        run: ./gradlew test jacocoTestCoverageVerification
 
   sonarqube:
     runs-on: ubuntu-latest
@@ -430,7 +459,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
           format: sarif
@@ -446,7 +475,7 @@ jobs:
           category: trivy-${{ matrix.service }}
 
       - name: Trivy scan (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
           format: table

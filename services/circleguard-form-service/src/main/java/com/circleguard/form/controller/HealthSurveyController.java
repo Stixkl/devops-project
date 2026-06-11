@@ -17,6 +17,9 @@ public class HealthSurveyController {
 
     @PostMapping
     public ResponseEntity<HealthSurvey> submit(@RequestBody HealthSurvey survey) {
+        if (survey.getAnonymousId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
         formMetrics.recordSurveySubmitted();
         return ResponseEntity.ok(surveyService.submitSurvey(survey));
     }

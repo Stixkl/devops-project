@@ -71,4 +71,26 @@ public class LoginControllerTest {
                 .andExpect(jsonPath("$.type").value("Bearer"))
                 .andExpect(jsonPath("$.mode").value("full"));
     }
+
+    @Test
+    void shouldRejectMalformedAnonymousIdOnVisitorHandoff() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/visitor/handoff")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"anonymousId\": \"test-anon-1718000000000\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldGenerateVisitorHandoffForValidUuid() throws Exception {
+        UUID anonymousId = UUID.randomUUID();
+        Mockito.when(jwtService.generateToken(Mockito.eq(anonymousId), Mockito.any(Authentication.class)))
+                .thenReturn("visitor-token");
+
+        mockMvc.perform(post("/api/v1/auth/visitor/handoff")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"anonymousId\": \"" + anonymousId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("visitor-token"))
+                .andExpect(jsonPath("$.handoffPayload").exists());
+    }
 }
