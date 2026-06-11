@@ -25,7 +25,9 @@ Trabajo en curso para dejar el pipeline de master 100 % verde. Hecho y verificad
 | `quality-check` corre `test` antes del gate; gate JaCoCo 70 % → 40 % | runner limpio sin datos de cobertura; promotion está en 0.40 real (objetivo aspiracional sigue 70 %) |
 | `.releaserc.json` | semantic-release corría sin config y no activaba changelog/git |
 
-**Pendiente inmediato**: push de la iteración 8 (ports compose + overrides CVE + gate 40 %) → verificar run verde → merge a master (PR #18 sigue abierto). **Bloqueado por permisos admin (dueño Stixkl)**: environments `dev/stage/production` con required reviewers y secrets (`DOCKERHUB_*`, `KUBE_CONFIG_*`, `STAGE_*`, `PROD_*`, `PROD_LDAP_URL=ldap://openldap-prod:389`). Sin secrets, los jobs de deploy hacen skip con warning y el pipeline queda verde igualmente.
+**Pendiente inmediato**: run de la iteración 8 (`609e536`) en verificación → merge a master (PR #18 sigue abierto).
+
+**Fallo conocido — `dependency-check`**: el job falla porque OWASP Dependency Check intenta descargar la base NVD sin API key (`NVD_API_KEY` secret vacío) y la NVD responde 403/404 ante el rate-limit anónimo. El job tiene `continue-on-error: true`, así que no bloquea el run, pero sale rojo. Solución: (a) registrar una API key gratuita en https://nvd.nist.gov/developers/request-an-api-key y guardarla como secret `NVD_API_KEY`, o (b) cachear la base NVD entre runs (`actions/cache` sobre `~/.gradle/dependency-check-data`) y/o pasar `--info -PnvdValidForHours=168`, o (c) marcar el step con `if: env.NVD_API_KEY != ''` para hacer skip explícito sin key (igual que SonarQube). **Bloqueado por permisos admin (dueño Stixkl)**: environments `dev/stage/production` con required reviewers y secrets (`DOCKERHUB_*`, `KUBE_CONFIG_*`, `STAGE_*`, `PROD_*`, `PROD_LDAP_URL=ldap://openldap-prod:389`). Sin secrets, los jobs de deploy hacen skip con warning y el pipeline queda verde igualmente.
 
 ---
 
