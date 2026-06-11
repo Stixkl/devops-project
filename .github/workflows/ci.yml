@@ -166,6 +166,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     continue-on-error: true
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
     steps:
       - name: Checkout code
@@ -178,13 +180,23 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Cache NVD database
+        if: env.NVD_API_KEY != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-data-${{ runner.os }}
+
       - name: Run OWASP Dependency Check
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        if: env.NVD_API_KEY != ''
         run: ./gradlew dependencyCheckAggregate --no-daemon
 
+      - name: Dependency Check skipped notice
+        if: env.NVD_API_KEY == ''
+        run: echo "::warning::NVD_API_KEY not set — skipping OWASP Dependency Check (the NVD rate-limits anonymous downloads with 403). Get a free key at https://nvd.nist.gov/developers/request-an-api-key"
+
       - name: Upload Dependency Check reports
-        if: always()
+        if: always() && env.NVD_API_KEY != ''
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-reports

@@ -1,6 +1,9 @@
 spring:
   application:
     name: circleguard-identity-service
+  kafka:
+    producer:
+      observation-enabled: true
   mvc:
     problemdetails:
       enabled: true
@@ -74,11 +77,6 @@ management:
     http:
       server:
         exclude-patterns: /actuator/health/**,/actuator/health
-
-spring:
-  kafka:
-    producer:
-      observation-enabled: true
 
 server:
   port: ${SERVER_PORT:8083}

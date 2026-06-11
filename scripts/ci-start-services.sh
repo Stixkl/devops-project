@@ -14,6 +14,27 @@ declare -A PORTS=(
 PID_FILE=/tmp/cg-pids
 : > "$PID_FILE"
 
+# Wait for the datastores the services need at startup; promotion-service in
+# particular opens a Neo4j connection from a @PostConstruct and crashes if
+# bolt is not up yet.
+echo "Waiting for datastores..."
+for target in "postgres:5432" "redis:6379" "kafka:9092" "neo4j:7687" "openldap:389"; do
+  name=${target%%:*}; port=${target##*:}
+  ready=false
+  for i in $(seq 1 40); do
+    if (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; then
+      exec 3>&- 3<&- || true
+      echo "  $name ready on :$port"
+      ready=true
+      break
+    fi
+    sleep 3
+  done
+  if [ "$ready" = false ]; then
+    echo "  ERROR: $name never opened :$port"; docker ps -a; exit 1
+  fi
+done
+
 echo "Building bootJars..."
 ./gradlew \
   :services:circleguard-auth-service:bootJar \
@@ -46,7 +67,7 @@ for svc in "${!PORTS[@]}"; do
   done
   if [ "$ready" = false ]; then
     echo "  WARNING: $svc-service did not become healthy; dumping last log lines:"
-    tail -n 20 "/tmp/$svc.log" || true
+    tail -n 80 "/tmp/$svc.log" || true
   fi
 done
 
