@@ -57,7 +57,7 @@ Jenkinsfile-master fijando `RELEASE_VERSION` al tag anterior.
 Migraciones Flyway **aditivas** (no se borran columnas en el mismo release
 que deja de usarlas) → la versión N-1 siempre puede correr contra el esquema
 N. Restauración mayor: backup diario de PostgreSQL + Velero
-(`k8s/dr/velero-schedule.yaml`).
+(`circleguard-infra/k8s/dr/velero-schedule.yaml`).
 
 ### Infraestructura (Terraform)
 Estado remoto versionado (backend azurerm). Rollback = `git revert` del

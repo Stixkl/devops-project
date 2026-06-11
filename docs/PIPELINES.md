@@ -16,6 +16,16 @@ salen de la red del cluster). Un fallo en CI bloquea el merge; un fallo en CD
 bloquea la promoción y dispara el plan de rollback
 (`docs/CHANGE_MANAGEMENT.md`).
 
+## Dual checkout: app + infra
+
+Los manifiestos Kubernetes viven en el repo separado
+[circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Cada
+Jenkinsfile tiene un stage **Checkout Infra** que clona ese repo dentro del
+workspace en `infra/`; los comandos de despliegue usan rutas `infra/k8s/...`
+(p. ej. `kubectl apply -f infra/k8s/dev/ -n circleguard-dev`). Así el código
+de aplicación y la infraestructura versionan por separado pero se despliegan
+juntos.
+
 ## Arquitectura de Pipelines
 
 ```
@@ -37,13 +47,14 @@ Git Repository
 | Stage | Descripción |
 |-------|-------------|
 | Checkout | Descarga código fuente |
+| Checkout Infra | Clona `circleguard-infra` en `infra/` |
 | Build & Compile | `./gradlew :services:circleguard-<svc>-service:build -x test` |
 | Unit Tests | `./gradlew test` + JUnit reports |
 | Security Scan | OWASP Dependency Check |
 | Docker Build | Construye imagen con Dockerfile.<service> |
 | Docker Security Scan | Trivy image scan |
 | Push to Registry | docker push a Docker Hub |
-| Deploy to Dev K8s | kubectl apply en namespace `circleguard-dev` |
+| Deploy to Dev K8s | `kubectl apply -f infra/k8s/dev/` en namespace `circleguard-dev` |
 | Smoke Tests | Health check del deployment |
 
 **Variables de entorno**:
@@ -58,10 +69,11 @@ Git Repository
 | Stage | Descripción |
 |-------|-------------|
 | Checkout | Descarga código fuente |
+| Checkout Infra | Clona `circleguard-infra` en `infra/` |
 | Build | `./gradlew build` completo |
 | Docker Build | Imagen con tag `stage-${BUILD_NUMBER}` |
 | Push to Registry | docker push |
-| Deploy to Stage K8s | kubectl apply en namespace `circleguard-stage` |
+| Deploy to Stage K8s | `kubectl apply -f infra/k8s/stage/` en namespace `circleguard-stage` (incluye datastores: kafka, zookeeper, neo4j, redis, openldap) |
 | Integration Tests | `./gradlew :tests:integration-tests:test` |
 | E2E Tests (Cypress) | `npx cypress run` contra APIs |
 | Performance Tests (Locust) | locust headless 100 users, 5 min |
@@ -78,11 +90,12 @@ Git Repository
 | Stage | Descripción |
 |-------|-------------|
 | Checkout | Descarga + genera versión semver |
+| Checkout Infra | Clona `circleguard-infra` en `infra/` |
 | Build | `./gradlew clean build` (excluye integration/e2e) |
 | Docker Build | Tags: `${RELEASE_VERSION}` + `latest` |
 | Security Scan (parallel) | OWASP + Trivy |
 | Push to Registry | docker push ambas tags |
-| Deploy to Production K8s | kubectl apply en `circleguard-master` |
+| Deploy to Production K8s | `kubectl apply -f infra/k8s/master/` en `circleguard-master` (incluye datastores `*-prod` con PVCs) |
 | Smoke Tests | curl health endpoint |
 | Generate Release Notes | `scripts/generate-release-notes.sh` |
 | Tag & Notify | git tag + archivado |
@@ -133,6 +146,11 @@ Crear en Jenkins → Manage Credentials:
 | `kubeconfig-dev` | Secret file | Kubeconfig para namespace dev |
 | `kubeconfig-stage` | Secret file | Kubeconfig para namespace stage |
 | `kubeconfig-master` | Secret file | Kubeconfig para namespace master |
+| `LDAP_URL` | Secret text | URL de LDAP por entorno; en prod debe ser `ldap://openldap-prod:389` |
+
+Los secretos de stage/master se generan en deploy con plantillas `envsubst`
+alimentadas por estas credenciales (la plantilla de master incluye la clave
+`NEO4J_AUTH`); dev usa Sealed Secrets (ver repo infra).
 
 ## Multibranch Pipeline Configuration
 

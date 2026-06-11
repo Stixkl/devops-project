@@ -27,6 +27,9 @@ pipeline {
         SERVICE_NAME = getServiceName()
         DOCKER_IMAGE = "circleguard/${SERVICE_NAME}-service"
         DOCKER_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT[0..7]}"
+        INFRA_REPO = 'https://github.com/JuanAmor8/circleguard-infra.git'
+        INFRA_BRANCH = 'master'
+        INFRA_DIR = 'infra'
     }
 
     options {
@@ -40,6 +43,18 @@ pipeline {
             steps {
                 echo "Building ${SERVICE_NAME} from commit ${env.GIT_COMMIT[0..7]}"
                 checkout scm
+                script {
+                    // Preservar el commit del repo de aplicacion antes del checkout de infra
+                    env.APP_COMMIT = env.GIT_COMMIT
+                }
+            }
+        }
+
+        stage('Checkout Infra') {
+            steps {
+                dir("${INFRA_DIR}") {
+                    git url: "${INFRA_REPO}", branch: "${INFRA_BRANCH}"
+                }
             }
         }
 
@@ -85,8 +100,8 @@ pipeline {
             steps {
                 sh """
                     kubectl config use-context docker-desktop || true
-                    kubectl apply -f k8s/namespaces/ 2>/dev/null || true
-                    kubectl apply -f k8s/dev/ 2>/dev/null || true
+                    kubectl apply -f infra/k8s/namespaces/ 2>/dev/null || true
+                    kubectl apply -f infra/k8s/dev/ 2>/dev/null || true
                     kubectl rollout status deployment/${SERVICE_NAME}-service -n circleguard-dev --timeout=60s || true
                 """
             }

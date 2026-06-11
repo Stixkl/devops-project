@@ -3,7 +3,7 @@
 **Chaos Mesh 2.x** instalado vía Helm en el cluster kind, con 4 experimentos
 diseñados, ejecutados y documentados contra un entorno objetivo real: el
 `dashboard-service` (Java + resilience4j) con PostgreSQL y un stub de
-`promotion-service`. Manifests en `chaos/`.
+`promotion-service`. Manifests en `circleguard-infra/chaos/`.
 
 El resultado más valioso: **el experimento 1 falsó la hipótesis** y destapó un
 bug real en el fallback de caché, que se corrigió e integró a la arquitectura
@@ -102,9 +102,9 @@ métrica `jvm_memory_used_bytes` queda disponible para la alerta
    convertía un defecto funcional en degradación silenciosa. Ahora está
    documentado el porqué del static.
 3. **Límites de recursos validados**: requests/limits del Deployment de
-   chaos (`chaos/00-target-env.yaml`) demostraron contener presión de memoria
+   chaos (`circleguard-infra/chaos/00-target-env.yaml`) demostraron contener presión de memoria
    sin afectar disponibilidad — patrón replicado en los deployments de
-   `k8s/{dev,stage,master}`.
+   `circleguard-infra/k8s/{dev,stage,master}`.
 4. **Las probes correctas importan**: la recuperación de 75s del exp. 3
    depende de los thresholds de liveness (3×10s); valores mayores alargarían
    el downtime sin beneficio.

@@ -3,8 +3,8 @@
 Service mesh **Linkerd** (edge-26.5.5) desplegado y verificado en vivo sobre un
 cluster kind (`circleguard-mesh`), cubriendo los 5 requisitos del bonus:
 mTLS, traffic shifting canary, visualización, circuit breakers y retry policies.
-Manifests en `k8s/mesh/`; los namespaces de la aplicación
-(`k8s/namespaces/*.yaml`) ya están anotados con `linkerd.io/inject: enabled`
+Manifests en `circleguard-infra/k8s/mesh/`; los namespaces de la aplicación
+(`circleguard-infra/k8s/namespaces/*.yaml`) ya están anotados con `linkerd.io/inject: enabled`
 para enrolar los 8 microservicios al desplegarse.
 
 ## Arquitectura
@@ -28,7 +28,7 @@ automáticamente por el `proxy-injector` gracias a la anotación del namespace.
 
 ## Instalación (reproducible)
 
-Ver `k8s/mesh/README.md`. Resumen:
+Ver `circleguard-infra/k8s/mesh/README.md`. Resumen (desde el repo `circleguard-infra`):
 
 ```bash
 kind create cluster --name circleguard-mesh
@@ -56,7 +56,7 @@ prometheus   client       linkerd-viz        circleguard-mesh   √
 
 ### 2. Traffic shifting para canary (Gateway API HTTPRoute)
 
-Pesos declarados en `k8s/mesh/20-canary-httproute.yaml`: `backend-v1=90,
+Pesos declarados en `circleguard-infra/k8s/mesh/20-canary-httproute.yaml`: `backend-v1=90,
 backend-v2=10`. Se cambió en caliente a 50/50 con `kubectl patch` y el tráfico
 real siguió los pesos (ventana de 1 min, tráfico generado por `client`):
 
@@ -72,7 +72,7 @@ mientras se observa su tasa de éxito en linkerd-viz.
 
 ### 3. Retry policies (ServiceProfile)
 
-`k8s/mesh/30-serviceprofile-retries.yaml` define la ruta `GET /` con
+`circleguard-infra/k8s/mesh/30-serviceprofile-retries.yaml` define la ruta `GET /` con
 `isRetryable: true` y presupuesto de reintentos (`retryBudget: ratio 0.2,
 minRetriesPerSecond 10`). Verificación con éxito efectivo vs real:
 
@@ -88,7 +88,7 @@ backend. Ante fallos transitorios EFFECTIVE > ACTUAL.)
 ### 4. Circuit breaker (failure accrual)
 
 Anotaciones activas en el Service apex `backend`
-(`k8s/mesh/10-backend.yaml`), capturadas del cluster:
+(`circleguard-infra/k8s/mesh/10-backend.yaml`), capturadas del cluster:
 
 ```
 balancer.linkerd.io/failure-accrual: consecutive
@@ -110,8 +110,8 @@ scrapea todos los sidecars; estado del plano: `linkerd check` OK.
 
 ## Integración con CircleGuard
 
-- `k8s/namespaces/namespace-{dev,stage,master}.yaml`: `linkerd.io/inject:
-  enabled` — al aplicar los deployments de `k8s/{dev,stage,master}/` en un
+- `circleguard-infra/k8s/namespaces/namespace-{dev,stage,master}.yaml`: `linkerd.io/inject:
+  enabled` — al aplicar los deployments de `circleguard-infra/k8s/{dev,stage,master}/` en un
   cluster con Linkerd, los 8 servicios quedan en el mesh con mTLS sin cambios
   de código.
 - El patrón canary del HTTPRoute es directamente aplicable a los servicios

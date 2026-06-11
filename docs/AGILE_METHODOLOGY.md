@@ -37,7 +37,7 @@ versionado semántico automatizado (semantic-release en Actions, tags
 | HU-01 Setup local | `docker-compose.dev.yml` con los 12 contenedores (8 servicios + infra) |
 | HU-03 Branching | `BRANCHING_STRATEGY.md`, ramas dev/release/main activas |
 | HU-04 CI base | `.github/workflows/ci.yml` (build + unit tests por servicio) |
-| HU-05 Terraform base | `terraform/` con módulo `aks-cluster`, 3 ambientes, backend azurerm |
+| HU-05 Terraform base | `circleguard-infra/terraform/` con módulo `aks-cluster`, 3 ambientes, backend azurerm |
 | HU-06 Pipelines despliegue | `jenkins/Jenkinsfile-{dev,stage,master}` |
 
 **Review**: demo de pipeline dev desplegando a Kubernetes local.
@@ -54,7 +54,7 @@ versionado semántico automatizado (semantic-release en Actions, tags
 |----|------------------------|
 | HU-07 Pruebas completas | Integración (`tests/integration-tests`), E2E Cypress (5 specs), Locust, ZAP baseline en CI |
 | HU-08 Calidad/seguridad CI | SonarQube + JaCoCo + OWASP dependency-check + Trivy en `ci.yml` |
-| HU-09 Observabilidad | kube-prometheus-stack + ServiceMonitors ×8 + Jaeger + ELK + alertas (`k8s/master/observability/`) |
+| HU-09 Observabilidad | kube-prometheus-stack + ServiceMonitors ×8 + Jaeger + ELK + alertas (`circleguard-infra/k8s/master/observability/`) |
 | HU-10 Patrones | Circuit Breaker + External Config + Feature Toggle (`docs/DESIGN_PATTERNS.md`) |
 | HU-11 Bonus | Service Mesh, Chaos, FinOps, Multi-Cloud (`docs/BONUS_*.md`) |
 

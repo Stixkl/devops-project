@@ -8,23 +8,31 @@
 
 Antes de comenzar, verifica que todo está en su lugar:
 
+> **Nota — dos repositorios**: la infraestructura (`terraform/`, `k8s/`, `observability/`, `chaos/`, `multicloud/`) vive ahora en un repo separado: [circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Clónalo junto a este repo antes de cualquier despliegue:
+>
+> ```powershell
+> git clone https://github.com/JuanAmor8/circleguard-infra.git
+> ```
+
 ```powershell
-# Verificar estructura
+# Verificar estructura (repo de aplicación)
 Get-ChildItem C:\Users\juanc\Videos\devops-project\docker
 Get-ChildItem C:\Users\juanc\Videos\devops-project\jenkins
-Get-ChildItem C:\Users\juanc\Videos\devops-project\k8s
 Get-ChildItem C:\Users\juanc\Videos\devops-project\tests
 Get-ChildItem C:\Users\juanc\Videos\devops-project\scripts
 Get-ChildItem C:\Users\juanc\Videos\devops-project\docs
+
+# Verificar estructura (repo de infraestructura, clonado al lado)
+Get-ChildItem C:\Users\juanc\Videos\circleguard-infra\k8s
 ```
 
 Debes ver:
 - `docker/`: 6 Dockerfiles + docker-compose.yml
 - `jenkins/`: 3 Jenkinsfiles
-- `k8s/`: namespaces, dev, stage, master
 - `tests/`: integration-tests, e2e, performance
 - `scripts/`: 8 scripts
-- `docs/`: 4 docs nuevos (TALLER2_README, PIPELINES, TESTING_STRATEGY, VIDEO_SCRIPT)
+- `docs/`: PIPELINES, TESTING_STRATEGY, PROJECT_OVERVIEW, architecture/
+- En `circleguard-infra/`: `k8s/` (namespaces, dev, stage, master), `terraform/`, `observability/`, `chaos/`, `multicloud/`
 
 ---
 
@@ -137,8 +145,28 @@ docker images | Select-String circleguard
 
 ## B4. DESPLEGAR A KUBERNETES
 
+Los manifiestos viven en el repo [circleguard-infra](https://github.com/JuanAmor8/circleguard-infra). Clónalo primero si no lo has hecho.
+
+### Secretos de DEV (Sealed Secrets)
+
+El antiguo `k8s/dev/secrets.yaml` (base64 en git) fue reemplazado por **Bitnami Sealed Secrets**:
+
 ```powershell
-cd C:\Users\Administrator\Videos\devops-project
+# 1. Instalar el controller (una sola vez por cluster)
+helm install sealed-secrets sealed-secrets/sealed-secrets -n kube-system
+
+# 2. Generar los secretos sellados (desde el repo circleguard-infra)
+cd C:\Users\Administrator\Videos\circleguard-infra
+./scripts/seal-dev-secrets.sh
+# Produce k8s/dev/sealed-secrets.yaml (cifrado, seguro de commitear)
+```
+
+Stage y master siguen usando plantillas `envsubst` alimentadas por credenciales de Jenkins. Nota: la plantilla de secretos de master ahora incluye la clave `NEO4J_AUTH`, y la credencial `LDAP_URL` de Jenkins para prod debe ser `ldap://openldap-prod:389`.
+
+### Despliegue
+
+```powershell
+cd C:\Users\Administrator\Videos\circleguard-infra
 
 # 1. Crear namespaces
 kubectl apply -f k8s/namespaces/
@@ -146,7 +174,7 @@ kubectl apply -f k8s/namespaces/
 # 2. Verificar namespaces
 kubectl get namespaces
 
-# 3. Desplegar a DEV
+# 3. Desplegar a DEV (incluye sealed-secrets.yaml)
 kubectl apply -f k8s/dev/ -n circleguard-dev
 
 # 4. Ver pods
@@ -161,6 +189,13 @@ kubectl rollout status deployment/auth-service -n circleguard-dev --timeout=120s
 # 7. Ver logs de un pod
 kubectl logs -n circleguard-dev deployment/auth-service --tail=50
 ```
+
+### Datastores en stage y master
+
+Ya no es solo dev: los manifiestos de `circleguard-infra` despliegan también los datastores en stage y master:
+
+- **stage**: `kafka`, `zookeeper`, `neo4j`, `redis`, `openldap` (almacenamiento `emptyDir`).
+- **master (prod)**: `kafka-prod`, `zookeeper-prod`, `neo4j-prod`, `redis-prod`, `openldap-prod` (con PVCs).
 
 ---
 
@@ -273,7 +308,8 @@ Estructura del video (≤8 minutos):
 cd C:\Users\Administrator\Videos\devops-project
 
 # Crear ZIP con todos los artefactos
-Compress-Archive -Path docker,jenkins,k8s,tests,scripts,docs -DestinationPath circleguard-taller2-entrega.zip -Force
+Compress-Archive -Path docker,jenkins,tests,scripts,docs -DestinationPath circleguard-taller2-entrega.zip -Force
+# (los manifiestos k8s viven en el repo circleguard-infra)
 
 # Verificar tamaño
 Get-Item circleguard-taller2-entrega.zip | Select-Object Name, Length
