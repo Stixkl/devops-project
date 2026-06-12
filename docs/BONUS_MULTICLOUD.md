@@ -18,8 +18,8 @@ kind que simulan los dos clouds), y comparativa de rendimiento/costos.
                 │ AZURE — AKS      │   │ GCP — GKE (DR)   │
                 │ cg-aks-prod      │   │ cg-gke-dr        │
                 │ (activo)         │   │ (pasivo, Spot)   │
-                │ terraform/main.tf│   │ terraform/        │
-                │                  │   │   multicloud.tf   │
+                │ environments/    │   │ terraform/        │
+                │   prod/          │   │   multicloud.tf   │
                 └────────┬─────────┘   └──▲───────────────┘
                          │   Velero        │ restore
                          └──► bucket GCS ──┘
@@ -31,8 +31,9 @@ kind que simulan los dos clouds), y comparativa de rendimiento/costos.
 > Todas las rutas de este documento viven en el repo
 > [circleguard-infra](https://github.com/JuanAmor8/circleguard-infra).
 
-- **Azure (activo)**: módulo `circleguard-infra/terraform/modules/aks-cluster` × 3 ambientes
-  (`terraform/main.tf`).
+- **Azure (activo)**: módulo `circleguard-infra/terraform/modules/aks-cluster` × 3 ambientes,
+  cada uno en su propio root aislado (`terraform/environments/{dev,stage,prod}/`),
+  con state separado (`dev.tfstate`/`stage.tfstate`/`prod.tfstate`).
 - **GCP (respaldo)**: módulo espejo `circleguard-infra/terraform/modules/gke-cluster`
   (`google_container_cluster` + node pools con autoscaling y Spot, interfaz
   de variables equivalente a la del módulo AKS) instanciado en
