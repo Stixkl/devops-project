@@ -89,27 +89,39 @@ Depuración iterativa contra el clúster real. Cada fallo se arregló en el repo
 
 ## 0.2 Despliegue real en GCP (GKE) — segundo cloud del bonus (2026-06-12)
 
-Segundo proveedor para el bonus Multi-Cloud. **IaC/CD listos y validados**; la
-ejecución contra el cloud real se corre con el runbook `docs/DESPLIEGUE_GCP.md`
-(requiere credenciales GCP). Mismo patrón que Azure: roots aislados, state
-separado, manifiestos reutilizados.
+Segundo proveedor para el bonus Multi-Cloud **desplegado real**: app corriendo,
+**13/13 pods `Running` en `circleguard-dr`** sobre `cg-gke-dr`, con backup y
+restore Velero ejecutados contra un bucket GCS. Provisionado desde GCP Cloud
+Shell (proyecto `circleguard-gke-3073`). Mismo patrón que Azure: roots aislados,
+state separado, manifiestos reutilizados.
 
 | Pieza | Estado |
 |---|---|
-| Root TF `terraform/environments/gcp-dr/` | ✅ `terraform validate` OK; instancia `gke-cluster` (zonal `us-central1-a`, 2× `e2-medium` spot, autoscaling 1→3) |
-| State remoto | ✅ reusa backend azurerm `cgtf816751`, key `gcp-dr.tfstate` (aislado del de Azure) |
-| Bucket Velero + SA | ✅ `cg-velero-dr-<project>` (GCS) + SA `velero-backup` (`roles/storage.admin`) en el root |
-| Overlay app `k8s/gcp/` | ✅ copia de `k8s/dev/`, namespace `circleguard-dr`, gateway LoadBalancer, hereda fixes de AKS |
-| Re-sellado secretos | ✅ `scripts/seal-gcp-secrets.sh` (cert de GKE; el SealedSecret de dev no descifra aquí) |
-| Workflow `cd-gcp.yml` | ✅ `google-github-actions/auth` + `get-gke-credentials`, environment `gcp`, `workflow_dispatch` |
-| Velero install | ✅ `scripts/velero-install-gcp.sh` (AKS→GCS produce, GKE consume/restore) |
-| LB real entre clouds | ✅ `multicloud/haproxy.real.cfg` sobre IPs públicas reales AKS + GKE |
-| Limpieza | ✅ `terraform/multicloud.tf` huérfano (referenciaba `aks_prod`/`main.tf` borrado en §0.1) eliminado; GKE vive ahora en su env root |
+| AKS `cg-gke-dr` | ✅ desplegado real — GKE v1.35.3, zonal `us-central1-a`, `e2-medium` spot, autoscaling 1→5, 5 nodos Ready (proyecto `circleguard-gke-3073`) |
+| Root TF `terraform/environments/gcp-dr/` | ✅ `apply` aplicado; instancia `gke-cluster` + bucket GCS + SA Velero |
+| State | ✅ local en Cloud Shell para este deploy (backend azurerm omitido vía `backend_override.tf` por no tener creds Azure en GCP) |
+| Bucket Velero + SA | ✅ `cg-velero-dr-circleguard-gke-3073` (GCS) + SA `velero-backup` (`roles/storage.admin`) |
+| 8 microservicios + 5 datastores | ✅ 13/13 `Running` en `circleguard-dr` |
+| Gateway público | ✅ `Service LoadBalancer` → `136.116.9.74:8087`, `/actuator/health` → `UP` |
+| Re-sellado secretos | ✅ `scripts/seal-gcp-secrets.sh` con cert de GKE; descifró sin `CreateContainerConfigError` |
+| Backup/restore Velero | ✅ `cgdr1` Completed → `gs://cg-velero-dr-circleguard-gke-3073/backups/cgdr1/`; DR drill: borrado + restore Completed |
+| Perf GKE | ✅ 0.071 s promedio (20 req contra IP pública) |
+| Workflow `cd-gcp.yml` | ✅ `google-github-actions/auth` + `get-gke-credentials`, environment `gcp` (alternativa CI al deploy manual) |
+| LB real entre clouds | ✅ `multicloud/haproxy.real.cfg` listo; demo en vivo 2-cloud requiere AKS encendido |
+| Limpieza | ✅ `terraform/multicloud.tf` huérfano eliminado; GKE vive en su env root |
 
-**Pendiente de ejecución real**: provisión (`terraform apply`), deploy
-(`cd-gcp.yml`), backup/restore Velero y captura de números perf — todo
-documentado paso a paso en `docs/DESPLIEGUE_GCP.md`. Bloqueante: credenciales
-GCP (proyecto + billing + `gcloud auth`).
+### Fixes aplicados durante el deploy real a GKE (4 PRs a `circleguard-infra`)
+
+| # | Síntoma | Causa raíz | Fix |
+|---|---|---|---|
+| 1 | `Invalid value for field 'region': 'us-central1-a'` en la subnet | el módulo pasaba la zona también a `google_compute_subnetwork` (exige región) | subnet usa `replace(var.region, "/-[a-z]$/", "")` |
+| 2 | `No valid versions with the prefix "1.29"` | `min_master_version` pineado a una versión retirada del canal REGULAR | quitado el pin; el canal REGULAR gestiona versión |
+| 3 | 4 servicios `Pending` (Insufficient cpu) | `e2-medium` es shared-core → solo ~940m allocatable/nodo; 13 pods no caben en 3 | `max_count` 3→5 (autoscaler añadió nodos) |
+| 4 | Backup Velero atascado en `New` 20 min | pod `velero` `Pending` por CPU mientras el cluster se llenaba | resuelto al escalar a 5 nodos; pod velero schedulado, backup Completed |
+
+**Pendiente (opcional, no bloqueante)**: demo de LB en vivo entre AMBOS clouds y
+backup cruzado AKS→GCS requieren `az aks start` del `cg-aks-dev`; la config real
+(`haproxy.real.cfg`, `scripts/velero-install-gcp.sh`) ya está lista para ello.
 
 ---
 

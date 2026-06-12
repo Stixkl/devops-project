@@ -1,7 +1,7 @@
 # Despliegue en GCP (GKE) — Circle Guard
 
 > Guía operativa del despliegue real del **sitio DR multi-cloud** en Google Kubernetes Engine (GKE), segundo proveedor del bonus Multi-Cloud (Azure/AKS activo + GCP/GKE).
-> Estado: **artefactos IaC/CD listos y validados**; la ejecución contra el cloud real requiere credenciales GCP (sección 2) y se corre con el runbook de la sección 8.
+> Estado: ✅ **desplegado real** — 13/13 pods `Running` en `circleguard-dr` sobre `cg-gke-dr` (proyecto `circleguard-gke-3073`), gateway en IP pública `136.116.9.74:8087`, backup+restore Velero Completed contra bucket GCS. Verificado 2026-06-12.
 > Última actualización: 2026-06-12.
 
 ---
