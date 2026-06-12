@@ -87,6 +87,32 @@ Depuración iterativa contra el clúster real. Cada fallo se arregló en el repo
 
 ---
 
+## 0.2 Despliegue real en GCP (GKE) — segundo cloud del bonus (2026-06-12)
+
+Segundo proveedor para el bonus Multi-Cloud. **IaC/CD listos y validados**; la
+ejecución contra el cloud real se corre con el runbook `docs/DESPLIEGUE_GCP.md`
+(requiere credenciales GCP). Mismo patrón que Azure: roots aislados, state
+separado, manifiestos reutilizados.
+
+| Pieza | Estado |
+|---|---|
+| Root TF `terraform/environments/gcp-dr/` | ✅ `terraform validate` OK; instancia `gke-cluster` (zonal `us-central1-a`, 2× `e2-medium` spot, autoscaling 1→3) |
+| State remoto | ✅ reusa backend azurerm `cgtf816751`, key `gcp-dr.tfstate` (aislado del de Azure) |
+| Bucket Velero + SA | ✅ `cg-velero-dr-<project>` (GCS) + SA `velero-backup` (`roles/storage.admin`) en el root |
+| Overlay app `k8s/gcp/` | ✅ copia de `k8s/dev/`, namespace `circleguard-dr`, gateway LoadBalancer, hereda fixes de AKS |
+| Re-sellado secretos | ✅ `scripts/seal-gcp-secrets.sh` (cert de GKE; el SealedSecret de dev no descifra aquí) |
+| Workflow `cd-gcp.yml` | ✅ `google-github-actions/auth` + `get-gke-credentials`, environment `gcp`, `workflow_dispatch` |
+| Velero install | ✅ `scripts/velero-install-gcp.sh` (AKS→GCS produce, GKE consume/restore) |
+| LB real entre clouds | ✅ `multicloud/haproxy.real.cfg` sobre IPs públicas reales AKS + GKE |
+| Limpieza | ✅ `terraform/multicloud.tf` huérfano (referenciaba `aks_prod`/`main.tf` borrado en §0.1) eliminado; GKE vive ahora en su env root |
+
+**Pendiente de ejecución real**: provisión (`terraform apply`), deploy
+(`cd-gcp.yml`), backup/restore Velero y captura de números perf — todo
+documentado paso a paso en `docs/DESPLIEGUE_GCP.md`. Bloqueante: credenciales
+GCP (proyecto + billing + `gcloud auth`).
+
+---
+
 ## 1. Cumplimiento por rubro
 
 | # | Rubro (peso) | Estado | Evidencia clave |
@@ -108,7 +134,7 @@ Depuración iterativa contra el clúster real. Cada fallo se arregló en el repo
 | Service Mesh | ✅ | Linkerd: inject por namespace, canary 90/10 (HTTPRoute), circuit breaker failure-accrual, retries con budget (`circleguard-infra/k8s/mesh/`) |
 | Chaos Engineering | ✅ | Chaos Mesh: 4 experimentos con hipótesis documentadas (`circleguard-infra/chaos/experiments/`); experimento 1 falseó hipótesis → bug de caché CGLIB corregido e integrado |
 | FinOps | ✅ | Datos OpenCost reales (`docs/finops/`), instalador `scripts/install-opencost.sh`, script `scripts/scale-to-zero.sh`, Spot instances y análisis de ahorro |
-| Multi-Cloud | ✅ | Módulo GKE DR condicional (`circleguard-infra/terraform/multicloud.tf`), Velero backup AKS→GCS (`circleguard-infra/k8s/dr/velero-schedule.yaml`), demo failover HAProxy |
+| Multi-Cloud | ✅ | AKS real + GKE como segundo cloud: root real `terraform/environments/gcp-dr/` (cluster zonal spot + bucket Velero + SA), overlay `k8s/gcp/`, workflow `cd-gcp.yml`, Velero AKS→GCS, HAProxy a IPs reales (`multicloud/haproxy.real.cfg`). Runbook `docs/DESPLIEGUE_GCP.md` (ver §0.2) |
 
 ---
 
