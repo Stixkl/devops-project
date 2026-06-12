@@ -11,6 +11,7 @@ responsabilidad:
 | **CD dev** | `.github/workflows/cd-dev.yml` | Push a `dev` → build+push de imágenes y despliegue a K8s DEV |
 | **CD stage** | `.github/workflows/cd-stage.yml` | Push a `release/**` → build+push y despliegue a K8s STAGE |
 | **CD prod** | job `deploy-prod` de `ci.yml` | Push a `master` → despliegue a producción, gateado por el environment `production` (aprobación manual con required reviewers) |
+| **CD GCP (DR multi-cloud)** | `.github/workflows/cd-gcp.yml` | `workflow_dispatch` (manual) → despliegue del sitio DR a GKE (`cg-gke-dr`, namespace `circleguard-dr`). No se dispara por rama: el segundo cloud es pasivo, se promueve a demanda |
 
 Razón del diseño: un solo motor elimina la divergencia entre dos líneas de
 trabajo, centraliza el feedback de calidad en el PR y gobierna la promoción
@@ -42,6 +43,9 @@ Git Repository
     └── [master] ──→ ci.yml (release + deploy-prod) ──→ Docker Images (<version>, latest) ──→ K8s PROD
                          └── semantic-release: CHANGELOG + GitHub Release + tag vX.Y.Z
                          └── Aprobación manual (environment `production`)
+
+    [workflow_dispatch] ──→ cd-gcp.yml ──→ (reusa dev-latest) ──→ GKE cg-gke-dr (circleguard-dr)
+                              └── multi-cloud DR: Azure/AKS activo + GCP/GKE pasivo
 ```
 
 ## Mapeo rama → ambiente
@@ -51,6 +55,7 @@ Git Repository
 | `dev` | `cd-dev.yml` | `dev` | `circleguard-dev` | `dev-<sha>`, `dev-latest` | automático |
 | `release/**` | `cd-stage.yml` | `stage` | `circleguard-stage` | `stage-<run_number>` | automático |
 | `master` | `ci.yml` (`deploy-prod`) | `production` | `circleguard-master` | `<version>` (del tag semver), `latest` | **aprobación manual** (required reviewers) |
+| — (manual) | `cd-gcp.yml` | `gcp` | `circleguard-dr` (GKE) | `dev-latest` (reusa, no re-build) | `workflow_dispatch` |
 
 ## Pipeline DEV (.github/workflows/cd-dev.yml)
 
@@ -100,6 +105,22 @@ siguiente versión semver desde los commits convencionales, actualiza el
 CHANGELOG, crea el GitHub Release y el tag `vX.Y.Z`.
 `scripts/generate-release-notes.sh` queda solo como fallback manual.
 
+## Pipeline GCP — DR multi-cloud (.github/workflows/cd-gcp.yml)
+
+**Trigger**: `workflow_dispatch` (manual, con input `image_tag` default `dev-latest`).
+
+Segundo cloud del bonus Multi-Cloud: despliega la app al sitio DR en GKE
+(`cg-gke-dr`, namespace `circleguard-dr`). No re-construye imágenes — reutiliza
+las `dev-latest` ya publicadas por `cd-dev.yml`.
+
+| Job | Descripción |
+|-----|-------------|
+| `deploy-gcp` | Environment `gcp`; `google-github-actions/auth` (secret `GCP_SA_KEY`) + `get-gke-credentials` (`cluster_name=cg-gke-dr`, `location=us-central1-a`, `project_id` del secret `GCP_PROJECT`); checkout de `circleguard-infra`; `kubectl apply -f infra/k8s/namespaces/namespace-dr.yaml` + `infra/k8s/gcp/`; `set image` por servicio; rollout status; smoke `/actuator/health`. Si faltan los secrets GCP, el deploy se omite con warning |
+| `notify-failure` | Abre issue `cd-failure` si falla |
+
+> Alternativa manual (sin CI, p. ej. desde Cloud Shell): `kubectl apply -f
+> k8s/namespaces/namespace-dr.yaml -f k8s/gcp/`. Ver `docs/DESPLIEGUE_GCP.md`.
+
 ## Diagrama de Flujo (ASCII)
 
 ```
@@ -141,6 +162,7 @@ CHANGELOG, crea el GitHub Release y el tag `vX.Y.Z`.
 | `dev` | `cd-dev.yml` → job `deploy-dev` | — |
 | `stage` | `cd-stage.yml` → job de deploy | — |
 | `production` | `ci.yml` → job `deploy-prod` | **Required reviewers** (gate de aprobación manual) |
+| `gcp` | `cd-gcp.yml` → job `deploy-gcp` (sitio DR multi-cloud en GKE) | — |
 
 ### Secrets (Settings → Secrets and variables → Actions)
 
@@ -148,6 +170,7 @@ CHANGELOG, crea el GitHub Release y el tag `vX.Y.Z`.
 |--------|-------------|
 | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Login a Docker Hub |
 | `KUBE_CONFIG_DEV` / `KUBE_CONFIG_STAGE` / `KUBE_CONFIG_PROD` | Kubeconfig en base64 por ambiente; si falta, el deploy al cluster se omite con warning |
+| `GCP_SA_KEY` / `GCP_PROJECT` | (sitio DR multi-cloud) JSON de la service account de GCP y project id; usados por `cd-gcp.yml` para autenticarse y obtener credenciales de `cg-gke-dr`. Si faltan, el deploy a GKE se omite con warning |
 | `STAGE_*` | Valores para `envsubst` de los secretos de stage: `DB_PASSWORD`, `JWT_SECRET`, `QR_SECRET`, `LDAP_BIND_PASSWORD`, `NEO4J_PASSWORD`, `VAULT_SECRET`, `VAULT_SALT`, `VAULT_HASH_SALT`, `TWILIO_SID/TOKEN/FROM`, `GOTIFY_TOKEN` |
 | `PROD_*` | Igual que stage, más `DB_URL`, `DB_USERNAME`, `LDAP_URL` (debe ser `ldap://openldap-prod:389`), `LDAP_BIND_DN`, `NEO4J_USERNAME` |
 

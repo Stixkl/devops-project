@@ -168,8 +168,19 @@ backup cruzado AKS→GCS requieren `az aks start` del `cg-aks-dev`; la config re
 ## 3. Organización del repositorio
 
 Estado actual: **dos repositorios separados**:
-- **devops-project** (este repo): aplicación (services/), docker/, .github/workflows (ci.yml + cd-dev.yml + cd-stage.yml), tests/, scripts/, docs/.
+- **devops-project** (este repo): aplicación (services/), docker/, .github/workflows (ci.yml + cd-dev.yml + cd-stage.yml + **cd-gcp.yml**), tests/, scripts/, docs/.
 - **[circleguard-infra](https://github.com/JuanAmor8/circleguard-infra)**: terraform/, k8s/, observability/, chaos/, multicloud/, deploy-all.sh. Los workflows de CD lo clonan en `./infra/` durante los jobs de Deploy.
+
+### Ramas del trabajo multi-cloud (2026-06-12)
+
+| Repo | Rama | Estado | Contenido |
+|---|---|---|---|
+| circleguard-infra | `feat/multicloud-gcp-gke` | pusheada (pendiente PR a `master`) | root `terraform/environments/gcp-dr/`, overlay `k8s/gcp/`, scripts `seal-gcp-secrets.sh`/`velero-install-gcp.sh`, `multicloud/haproxy.real.cfg`, + 4 fixes del deploy real (ver §0.2) |
+| devops-project | `chore/split-infra-repo` | local (pendiente push + PR a `main`) | `cd-gcp.yml`, docs multi-cloud (`DESPLIEGUE_GCP.md`, `BONUS_MULTICLOUD`, este §0.2/§3), spec + plan en `docs/superpowers/` |
+
+> El branching nominal del proyecto (GitHub Flow) está en `BRANCHING_STRATEGY.md`.
+> Mapeo real rama→workflow→ambiente (incl. `cd-gcp.yml` por `workflow_dispatch`)
+> en `docs/PIPELINES.md`.
 
 Limpieza realizada (2026-06-10):
 - Eliminados: `docs/TALLER2_README.md`, `docs/INFORME_TALLER2.md` (taller anterior), `final.md` (duplicado del enunciado con encoding roto), `commit_msg.txt` (scratch)
