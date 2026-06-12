@@ -86,7 +86,7 @@ Mismo patrón que dev, con diferencias:
 |------|-------------|
 | Gate de aprobación | El job usa el environment `production`, configurado con required reviewers → el deploy queda en espera hasta aprobación manual |
 | Resolver versión | Toma la versión del último tag git (`vX.Y.Z`, creado por semantic-release) |
-| Build & Push | Construye y publica las imágenes release `juanamor8/circleguard-<svc>-service:<version>` y `:latest` |
+| Build & Push | Construye y publica las imágenes release `stixk/circleguard-<svc>-service:<version>` y `:latest` |
 | Checkout Infra | `actions/checkout` de `JuanAmor8/circleguard-infra` en `infra/` |
 | Render config | `envsubst` sobre `infra/k8s/master/{configmaps,secrets}.yaml` con los secretos `PROD_*` |
 | Deploy | `kubectl apply -f infra/k8s/master/` en `circleguard-master` (incluye datastores `*-prod` con PVCs); `kubectl set image` por servicio con anotación change-cause |

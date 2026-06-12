@@ -14,7 +14,7 @@ Cada entorno (dev, stage, prod) despliega un **clúster AKS independiente** con 
 
 - Resource Group (`rg-circle-guard-<entorno>`)
 - Virtual Network (`<clustername>-vnet`)
-- Subnet delegada a AKS (`<clustername>-subnet`)
+- Subnet dedicada al clúster (`<clustername>-subnet`), sin `delegation` explícita
 - Nodepools configurados según necesidades de carga
 - (Opcional) Azure Container Registry (solo prod)
 
@@ -43,25 +43,25 @@ Entorno PROD
 └── ACR: cg-aks-prodacr (Standard)
 ```
 
-## Estructura de módulos
+## Estructura de módulos y entornos
 
 ```
 circleguard-infra/terraform/
-├── main.tf                 # Instancia módulo aks-cluster 3 veces (dev, stage, prod)
-├── variables.tf            # Variables globales (location, tags, subscription)
-├── outputs.tf              # (vacío, outputs en módulo)
-├── providers.tf            # Provider Azure + backend remoto
-├── envs/
-│   ├── dev.tfvars          # Valores específicos DEV
-│   ├── stage.tfvars        # Valores específicos STAGE
-│   └── prod.tfvars         # Valores específicos PROD
-└── modules/
+├── environments/
+│   ├── dev/                # Root aislado + backend dev.tfstate
+│   ├── stage/              # Root aislado + backend stage.tfstate
+│   └── prod/               # Root aislado + backend prod.tfstate
+├── modules/
     └── aks-cluster/
         ├── main.tf
         ├── variables.tf
         ├── outputs.tf
         └── README.md
+└── scripts/
+    └── init-backend.sh
 ```
+
+Cada root instancia únicamente su clúster. Esto evita que un `terraform apply` o `destroy` de dev modifique stage/prod.
 
 ### Módulo `aks-cluster`
 
@@ -69,7 +69,7 @@ Este módulo reutilizable crea:
 
 1. **Resource Group**
 2. **Virtual Network** con espacio de direcciones configurable
-3. **Subnet** delegada a `Microsoft.ContainerService/managedClusters`
+3. **Subnet** dedicada, sin delegación a `Microsoft.ContainerService/managedClusters`
 4. **Azure Container Registry** (opcional)
 5. **AKS cluster** con System Assigned Identity
 6. **Nodepools** (uno como default_node_pool, los adicionales como recursos aparte)
@@ -82,7 +82,7 @@ Este módulo reutilizable crea:
 | `location` | string | Región Azure |
 | `resource_group_name` | string | Nombre del RG |
 | `cluster_name` | string | Nombre único global del cluster |
-| `kubernetes_version` | string | Versión de K8s (default 1.29.0) |
+| `kubernetes_version` | string | Versión de Kubernetes soportada por la región (dev real: 1.33) |
 | `nodepools` | list(object) | Lista de nodepools a crear |
 | `create_acr` | bool | Si crear Azure Container Registry |
 
@@ -117,14 +117,11 @@ Esto crea:
 - Storage Account: `cgterraformXXXX` (nombre único)
 - Container: `tfstate`
 
-Luego, para cada entorno:
+Luego, inicializar el root del entorno:
 
 ```bash
-terraform init \
-  -backend-config="resource_group_name=rg-terraform-state" \
-  -backend-config="storage_account_name=<nombre-storage>" \
-  -backend-config="container_name=tfstate" \
-  -backend-config="key=dev.tfstate"
+cd environments/dev
+terraform init -backend-config=backend.hcl
 ```
 
 El archivo de estado se guardará como `dev.tfstate`, `stage.tfstate`, `prod.tfstate` en el contenedor.
@@ -134,7 +131,9 @@ El archivo de estado se guardará como `dev.tfstate`, `stage.tfstate`, `prod.tfs
 ### 1. Crear un nuevo entorno
 
 ```bash
-terraform apply -var-file=envs/dev.tfvars
+cd circleguard-infra/terraform/environments/dev
+terraform init -backend-config=backend.hcl
+terraform apply -var-file=dev.tfvars
 ```
 
 Terraform:
@@ -146,14 +145,13 @@ Terraform:
 
 ```bash
 # Opción A: Usar Azure CLI
-az aks get-credentials \
+az aks get-credentials --admin \
   --resource-group rg-circle-guard-dev \
   --name cg-aks-dev \
   --file kubeconfig-dev.yaml
-
-# Opción B: Usar output de Terraform (decodificar base64)
-echo "dGVzdA==" | base64 -d > kubeconfig-dev.yaml
 ```
+
+El clúster dev está integrado con AAD. El kubeconfig admin evita depender de `kubelogin` en CI, pero concede acceso total y debe tratarse como secreto.
 
 Configurar `KUBECONFIG`:
 
@@ -175,10 +173,10 @@ Los workflows de CD clonan `circleguard-infra` en `infra/` (paso "Checkout infra
 
 ### 4. Actualizar escalado
 
-Si necesitas cambiar el número de nodos, modifica `envs/*.tfvars` y ejecuta:
+Si necesitas cambiar el número de nodos, modifica `environments/dev/dev.tfvars` y ejecuta desde ese root:
 
 ```bash
-terraform apply -var-file=envs/dev.tfvars
+terraform apply -var-file=dev.tfvars
 ```
 
 Terraform detectará cambios y actualizará los nodepools.
@@ -186,7 +184,8 @@ Terraform detectará cambios y actualizará los nodepools.
 ### 5. Destruir entorno
 
 ```bash
-terraform destroy -var-file=envs/dev.tfvars
+cd circleguard-infra/terraform/environments/dev
+terraform destroy -var-file=dev.tfvars
 ```
 
 **Cuidado**: elimina todos los recursos en ese RG, incluyendo datos de PVCs.
@@ -221,6 +220,8 @@ Los workflows de CD (`.github/workflows/cd-dev.yml`, `cd-stage.yml` y el job `de
    ```
    (la ruta `infra/` proviene del paso "Checkout infra repo", que clona `circleguard-infra` dentro del workspace.)
 4. Si el secret `KUBE_CONFIG_*` no está configurado, el job omite el despliegue al cluster con un warning (las imágenes se publican igualmente), útil para validar el pipeline sin un AKS activo.
+
+La ejecución real de dev, restricciones de Azure for Students y troubleshooting están documentados en `docs/DESPLIEGUE_AZURE.md`.
 
 ## Troubleshooting
 

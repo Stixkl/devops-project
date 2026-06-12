@@ -267,7 +267,7 @@ New-Item -ItemType Directory -Force -Path C:\Users\Administrator\Videos\devops-p
 
 ## B7. GRABAR VIDEO
 
-Sigue el guion en `docs/VIDEO_SCRIPT.md`. Herramientas recomendadas:
+Usa la siguiente estructura como guion. Herramientas recomendadas:
 - **OBS Studio** (gratis): https://obsproject.com/
 - **ShareX** (Windows, gratis): para screenshots rápidos
 

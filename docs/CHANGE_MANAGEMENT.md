@@ -35,7 +35,7 @@ Etapas del cambio (automatizadas en los pipelines):
   manual.
 - El job `deploy-prod` resuelve la versión desde ese último tag y las
   imágenes Docker quedan etiquetadas con la misma versión
-  (`juanamor8/circleguard-<svc>-service:<version>` + `:latest`) →
+  (`stixk/circleguard-<svc>-service:<version>` + `:latest`) →
   correlación release ↔ artefacto.
 
 ## 3. Planes de rollback

@@ -33,10 +33,12 @@ helm install opencost opencost/opencost -n opencost --create-namespace \
 
 ## 2. Costos de la infraestructura (Terraform / Azure)
 
-Costo estimado mensual por ambiente (precios públicos Azure eastus,
-pay-as-you-go, 730 h/mes; AKS Free tier ⇒ control plane $0). Para cifras al
+Costo estimado mensual por ambiente (precios públicos de referencia,
+pay-as-you-go, 730 h/mes; AKS Free tier ⇒ control plane $0). Dev se desplegó
+realmente en `centralus`; stage/prod son estimaciones de la arquitectura
+diseñada y no representan recursos activos en la suscripción Students. Para cifras al
 día se deja cableado Infracost
-(`infracost breakdown --path circleguard-infra/terraform --terraform-var-file envs/<env>.tfvars`,
+(`infracost breakdown --path circleguard-infra/terraform/environments/<env> --terraform-var-file <env>.tfvars`,
 requiere API key gratuita):
 
 | Ambiente | Cómputo | Detalle | Discos (128 GB) | Otros | Total/mes |
@@ -48,7 +50,7 @@ requiere API key gratuita):
 
 ## 3. Políticas de ahorro implementadas (como código)
 
-1. **Spot instances** (`circleguard-infra/terraform/main.tf`, módulo `aks-cluster`): pool `burst`
+1. **Spot instances** (`circleguard-infra/terraform/environments/stage`, módulo `aks-cluster`): pool `burst`
    de stage en `priority = "Spot"` con `spot_max_price = -1` y autoscaling
    **0→3** (scale-to-zero cuando no hay carga). Spot en Azure: hasta **-90%**
    vs on-demand (B2ms ~$60.74 → ~$6-18/mes por nodo).
@@ -59,10 +61,11 @@ requiere API key gratuita):
      de usuario tolerantes a evicción.
 2. **Autoscaling** en todos los pools de stage/prod (min/max declarados);
    dev con tamaño mínimo (2 × B2s burstable).
-3. **Scale-to-zero fuera de horario** (`circleguard-infra/terraform/scripts/aks-stop-start.sh`):
+3. **Scale-to-zero fuera de horario** (`scripts/scale-to-zero.sh` en este repo):
    `az aks stop/start` de dev y stage programable (L-V 20:00→07:00 + fines de
    semana). Un cluster detenido no factura cómputo. Ahorro ≈ **65%** del
-   cómputo de no-producción: (~$61 + $182) × 0.65 ≈ **$158/mes**.
+   cómputo de no-producción: (~$61 + $182) × 0.65 ≈ **$158/mes**. Para dev real:
+   `AZURE_RG_DEV=rg-circle-guard-dev AKS_CLUSTER_DEV=cg-aks-dev ./scripts/scale-to-zero.sh stop --env dev`.
 4. **VMs B-series (burstable)**: toda la flota usa B2s/B2ms/B4ms — créditos de
    CPU para cargas con valles, 30-50% más baratas que las D-series
    equivalentes (D2s_v3 ≈ $70 vs B2ms ≈ $61 con el doble de RAM que B2s).

@@ -2,11 +2,11 @@
 
 > Auditoría del repositorio contra los requisitos de `docs/Proyecto Final IngeSoft V (1).md`.
 > Verificación hecha sobre código, pipelines y manifiestos reales (no sobre afirmaciones de documentación).
-> Fecha: 2026-06-11 · Veredicto global: **~95 % completo** (faltan video y presentación).
+> Fecha: 2026-06-12 · Veredicto global: **~95 % completo** (faltan video y presentación).
 
 ## 0. Estado de estabilización CI (2026-06-11, branch `chore/split-infra-repo`)
 
-Trabajo en curso para dejar el pipeline de master 100 % verde. Hecho y verificado localmente (clean build + suite completa, incluyendo Testcontainers contra Postgres/Neo4j/Redis reales):
+Estabilización integrada en la rama actual. Los fixes se verificaron localmente con clean build y suite completa, incluyendo Testcontainers contra Postgres/Neo4j/Redis reales:
 
 | Fix | Causa raíz |
 |---|---|
@@ -25,15 +25,13 @@ Trabajo en curso para dejar el pipeline de master 100 % verde. Hecho y verificad
 | `quality-check` corre `test` antes del gate; gate JaCoCo 70 % → 40 % | runner limpio sin datos de cobertura; promotion está en 0.40 real (objetivo aspiracional sigue 70 %) |
 | `.releaserc.json` | semantic-release corría sin config y no activaba changelog/git |
 
-**Pendiente inmediato**: run de la iteración 8 (`609e536`) en verificación → merge a master (PR #18 sigue abierto).
-
-**Fallo conocido — `dependency-check`**: el job falla porque OWASP Dependency Check intenta descargar la base NVD sin API key (`NVD_API_KEY` secret vacío) y la NVD responde 403/404 ante el rate-limit anónimo. El job tiene `continue-on-error: true`, así que no bloquea el run, pero sale rojo. Solución: (a) registrar una API key gratuita en https://nvd.nist.gov/developers/request-an-api-key y guardarla como secret `NVD_API_KEY`, o (b) cachear la base NVD entre runs (`actions/cache` sobre `~/.gradle/dependency-check-data`) y/o pasar `--info -PnvdValidForHours=168`, o (c) marcar el step con `if: env.NVD_API_KEY != ''` para hacer skip explícito sin key (igual que SonarQube). **Bloqueado por permisos admin (dueño Stixkl)**: environments `dev/stage/production` con required reviewers y secrets (`DOCKERHUB_*`, `KUBE_CONFIG_*`, `STAGE_*`, `PROD_*`, `PROD_LDAP_URL=ldap://openldap-prod:389`). Sin secrets, los jobs de deploy hacen skip con warning y el pipeline queda verde igualmente.
+**Estado de `dependency-check`**: si `NVD_API_KEY` no está configurado, el workflow omite OWASP Dependency Check con un warning explícito. Con API key, restaura/cachea la base NVD, ejecuta el análisis y publica el reporte. El job mantiene `continue-on-error: true`, por lo que no bloquea el pipeline.
 
 ---
 
-## 0.1 Despliegue real en Azure (2026-06-11, en curso)
+## 0.1 Despliegue real en Azure (completado 2026-06-12)
 
-Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students** del equipo. Trabajo hecho sobre el repo `circleguard-infra` (branch `feat/split-terraform-environments`, commit `eb7e271`) y `devops-project` (doc, commit `fd9e55d`). Aún sin push.
+Despliegue real a Azure (AKS) usando la suscripción **Azure for Students** del equipo, sobre el repo `circleguard-infra`. **Estado 2026-06-12: app corriendo, 13/13 pods `Running` en `circleguard-dev`** tras 6 PRs de fixes (ver tabla abajo). Pipeline `cd-dev.yml` verde end-to-end.
 
 ### Refactor crítico de Terraform (bug bloqueante encontrado)
 
@@ -52,24 +50,40 @@ Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students
 - **Providers** `Microsoft.Storage` y `Microsoft.ContainerService` no venían registrados; se registraron con `az provider register`.
 - **Cluster AAD-enabled**: `kubectl` exige `kubelogin` (no instalado). Workaround para CI/CD: `az aks get-credentials --admin` (kubeconfig por certificado, sin kubelogin).
 
-### Estado del despliegue
+### Estado del despliegue — ✅ APP CORRIENDO EN AKS (2026-06-12)
+
+Pipeline `cd-dev.yml` verde end-to-end y los **13 pods de `circleguard-dev` corriendo** (8 microservicios + postgres, kafka, zookeeper, neo4j, redis). Verificado en vivo contra cg-aks-dev.
 
 | Pieza | Estado |
 |---|---|
 | Backend remoto TF | ✅ RG `rg-terraform-state`, Storage Account `cgtf816751`, container `tfstate`, key `dev.tfstate` (centralus) |
-| AKS `cg-aks-dev` | ✅ desplegado — 2× `Standard_B2s`, K8s v1.33.12, 2 nodos Ready |
+| AKS `cg-aks-dev` | ✅ desplegado — 2× `Standard_B2s`, K8s v1.33.12, 2 nodos Ready (RG `rg-circle-guard-dev`) |
 | Roots dev/stage/prod | ✅ separados, `terraform validate` OK |
-| GitHub environment `dev` + secret `KUBE_CONFIG_DEV` | ✅ creado/seteado (gh autenticado como Stixkl, admin del repo `Stixkl/devops-project`) |
-| Sealed Secrets controller | ✅ instalado en cg-aks-dev (v0.27.1, namespace `kube-system`, Running); namespace `circleguard-dev` creado |
-| Secrets `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` | ⚠️ username correcto = `stixk` (login validado local 2026-06-11); falta setear `DOCKERHUB_USERNAME=stixk` y un PAT nuevo en GitHub Secrets |
+| GitHub environment `dev` + secret `KUBE_CONFIG_DEV` | ✅ **base64 del kubeconfig admin** (el workflow hace `base64 -d`; guardarlo en crudo daba `base64: invalid input`) |
+| Sealed Secrets controller | ✅ v0.27.1 en `kube-system` (deployment real `sealed-secrets-controller`), Running |
+| Secrets `DOCKERHUB_USERNAME=stixk`/`DOCKERHUB_TOKEN` | ✅ seteados; build-push sube las 8 imágenes a `stixk/circleguard-*` (repos públicos) |
+| 8 microservicios + 5 datastores | ✅ 13/13 `Running` en `circleguard-dev` |
 
-### Bloqueos pendientes
+### Fixes aplicados para dejar el deploy verde (6 PRs a `circleguard-infra`)
 
-1. **DockerHub**: el username de login real es `stixk` (validado con `docker login -u stixk` OK, 2026-06-11; ojo: la pantalla de DockerHub muestra `docker login -u stixx`, pero ese da `unauthorized`). Corregido el hardcode `REGISTRY_USER=juanamor8`→`stixk` en los 3 workflows (`cd-dev.yml:14`, `cd-stage.yml:14`, `ci.yml:455/464/480/524`) y en los 8 `circleguard-infra/k8s/dev/deployment-*.yaml`. El namespace de las imágenes, el `DOCKERHUB_USERNAME` y el dueño del token deben ser `stixk`. Pendiente: setear secrets GitHub `DOCKERHUB_USERNAME=stixk` + PAT nuevo.
-2. ~~**Bug de tag de imagen**~~: ❌ falso. `matrix.service` ya incluye el sufijo `-service` (`auth-service`, etc.), así que build taggea `circleguard-auth-service` (`cd-dev.yml:53`) y deploy referencia `circleguard-auth-service` (`cd-dev.yml:91`, `circleguard-${svc}-service` con `svc=auth`). Coinciden los 8. No hay mismatch.
-3. **Re-sellar Sealed Secrets**: el `k8s/dev/sealed-secrets.yaml` actual está cifrado con la clave del clúster viejo. Re-sellar para cg-aks-dev requiere los **valores en texto plano** (no se pueden descifrar sin la clave privada del clúster original). Pendiente de los secretos fuente.
-4. **Push de branches** + push a rama `dev` para disparar `cd-dev.yml`.
-5. **FinOps**: apagar nodos entre demos con `circleguard-infra/terraform/scripts/aks-stop-start.sh` para no agotar el crédito Students.
+Depuración iterativa contra el clúster real. Cada fallo se arregló en el repo (reproducible, no parche en vivo):
+
+| # | Síntoma | Causa raíz | Fix (PR) |
+|---|---|---|---|
+| 0 | deploy-dev muere en 6s, `base64: invalid input` | `KUBE_CONFIG_DEV` guardado crudo, no base64 | re-guardado `base64 -w0` del kubeconfig admin |
+| 1 | ImagePullBackOff en los 8 servicios | manifests usaban `:latest` (tag inexistente; CI sube `dev-<sha>`/`dev-latest`) | `:latest`→`dev-latest` (PR #1) |
+| 2 | kafka/neo4j CrashLoopBackOff | k8s inyecta `KAFKA_PORT`/`NEO4J_PORT_*` que esas imágenes parsean como config | `enableServiceLinks: false` (PR #2) |
+| 3 | `CreateContainerConfigError` en servicios | SealedSecret cifrado con la clave del clúster viejo → no descifraba | re-sellado con cert de cg-aks-dev, valores mock (PR #3) |
+| 4 | `FATAL: database "circleguard_auth" does not exist` | postgres solo creaba la DB base `circleguard`; 5 servicios usan DB propia | initdb configmap crea `circleguard_{auth,identity,promotion,dashboard,form}` (PR #4) |
+| 5 | mucho `Pending` + rollouts en deadlock | sobre-suscripción: `replicas:2` en 4 servicios + requests altos vs 2× B2s (3800m CPU) | `replicas:1`, requests bajos (100m/192Mi), `maxSurge:0`, `startupProbe`, cap heap kafka/neo4j (PR #5) |
+| 6 | auth-service `WeakKeyException` (200 bits) | `QR_SECRET` de 25 bytes; JJWT exige ≥256 bits para HMAC-SHA | QR_SECRET ≥32 bytes + re-sellado (PR #6) |
+
+### Operación y fallos anticipados
+
+- **postgres usa `emptyDir`**: en reschedule o stop/start del clúster se pierden datos, pero el initdb recrea las 5 DBs y Flyway re-migra (auto-sana). Para persistencia real → PVC.
+- **SealedSecret atado a la clave del clúster**: si se recrea cg-aks-dev, re-sellar (`kubeseal --fetch-cert --controller-name sealed-secrets-controller` + `scripts/seal-dev-secrets.sh`).
+- **`dev-latest` mutable** pero cd-dev parchea a `dev-<sha>` inmutable → deploys pineados.
+- **FinOps**: apagar entre demos con `az aks stop/start` o `scripts/scale-to-zero.sh` configurando `AZURE_RG_DEV=rg-circle-guard-dev` y `AKS_CLUSTER_DEV=cg-aks-dev`.
 
 ---
 
@@ -81,7 +95,7 @@ Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students
 | 2 | Terraform IaC (20 %) | ✅ Completo | Módulos `circleguard-infra/terraform/modules/aks-cluster` y `gke-cluster`; 3 ambientes en roots aislados `terraform/environments/{dev,stage,prod}/` con state separado por entorno (refactor 2026-06-11, ver §0.1); backend remoto azurerm; **desplegado real en Azure** (`cg-aks-dev` en centralus); diagrama en `docs/architecture/circleguard-architecture.drawio` |
 | 3 | Patrones de diseño (10 %) | ✅ Completo | Circuit Breaker R4j en 3 clientes con fallbacks (`PromotionClient`, `IdentityClient`, `AuthServiceClient`); Retry (`PushServiceImpl` + `@EnableRetry`); Feature Toggle doble (property `DashboardProperties` + DB `SystemSettings`); External Configuration (`@ConfigurationProperties` + ConfigMaps); 10 patrones existentes catalogados en `docs/DESIGN_PATTERNS.md` |
 | 4 | CI/CD avanzado (15 %) | ✅ Completo | Todo en GitHub Actions: SonarQube (`ci.yml` job `sonarqube` + plugin Gradle); Trivy (`ci.yml` job `docker-build-scan`); versionado semántico (semantic-release, job `release`); CD por rama (`cd-dev.yml` dev, `cd-stage.yml` release/**, job `deploy-prod` de `ci.yml`); notificaciones de fallo (issue GitHub label `cd-failure` + Slack opcional); approval gate de producción vía environment `production` con required reviewers |
-| 5 | Pruebas completas (15 %) | ✅ Completo | 56 unitarias (8 servicios), 7 de integración (`tests/integration-tests`), 5 specs E2E Cypress, Locust con 4 clases de usuario, **OWASP ZAP baseline** (`ci.yml:276`), JaCoCo con verificación 70 % + codecov; todo automatizado en pipelines |
+| 5 | Pruebas completas (15 %) | ✅ Completo | 56 unitarias (8 servicios), 7 de integración (`tests/integration-tests`), 5 specs E2E Cypress, Locust con 4 clases de usuario, **OWASP ZAP baseline** (`ci.yml:276`), gate JaCoCo mínimo de 40 % + Codecov (objetivo aspiracional: 70 %); todo automatizado en pipelines |
 | 6 | Change Management (5 %) | ✅ Completo | `docs/CHANGE_MANAGEMENT.md` (proceso formal + tipos de cambio); Release Notes automáticas (semantic-release + `scripts/generate-release-notes.sh`); rollback multicapa (kubectl rollout undo, Flyway aditivo, Terraform revert, feature toggles); git tag por semantic-release (job `release` de `ci.yml`) |
 | 7 | Observabilidad (10 %) | ✅ Completo | Prometheus+Grafana en k8s (Helm values); ELK 8.15 en k8s master; Jaeger production-strategy (collectors + agents DaemonSet); 13 alert rules + Alertmanager con routing por severidad; probes liveness/readiness en los 8 servicios; **métricas de negocio** (`NotificationMetrics`, `AuthMetrics`); 8 ServiceMonitors |
 | 8 | Seguridad (5 %) | ✅ Completo | Escaneo continuo (Trivy + OWASP DC + ZAP); RBAC (`circleguard-infra/k8s/rbac.yaml`, least-privilege por entorno); TLS público (cert-manager + Let's Encrypt); gestión segura de secretos (dev con Bitnami Sealed Secrets — brecha #4 resuelta; stage/prod inyectados desde GitHub Secrets vía environments) |
@@ -93,7 +107,7 @@ Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students
 |----------------|--------|-----------|
 | Service Mesh | ✅ | Linkerd: inject por namespace, canary 90/10 (HTTPRoute), circuit breaker failure-accrual, retries con budget (`circleguard-infra/k8s/mesh/`) |
 | Chaos Engineering | ✅ | Chaos Mesh: 4 experimentos con hipótesis documentadas (`circleguard-infra/chaos/experiments/`); experimento 1 falseó hipótesis → bug de caché CGLIB corregido e integrado |
-| FinOps | ✅/⚠️ | Datos OpenCost reales (`docs/finops/`), Spot instances, análisis de ahorro; ⚠️ instalación OpenCost y script scale-to-zero no están en el repo |
+| FinOps | ✅ | Datos OpenCost reales (`docs/finops/`), instalador `scripts/install-opencost.sh`, script `scripts/scale-to-zero.sh`, Spot instances y análisis de ahorro |
 | Multi-Cloud | ✅ | Módulo GKE DR condicional (`circleguard-infra/terraform/multicloud.tf`), Velero backup AKS→GCS (`circleguard-infra/k8s/dr/velero-schedule.yaml`), demo failover HAProxy |
 
 ---
@@ -106,8 +120,8 @@ Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students
 | 2 | **Presentación** (20-30 min) — sin material en repo | Entregable obligatorio | Preparar slides: arquitectura, demo CI/CD, monitoreo, lecciones aprendidas |
 | 3 | ~~**Datastores en k8s prod**~~ | — | ✅ **RESUELTO**: stage despliega kafka, zookeeper, neo4j, redis y openldap (emptyDir); master despliega kafka-prod, zookeeper-prod, neo4j-prod, redis-prod y openldap-prod (con PVCs). Además se corrigió postgres-prod, que referenciaba el secret inexistente `db-credentials` (ahora usa `circleguard-secrets/DB_PASSWORD`) |
 | 4 | ~~**Secretos dev en claro**~~ | — | ✅ **RESUELTO**: `k8s/dev/secrets.yaml` reemplazado por Bitnami Sealed Secrets — controller vía Helm + `./scripts/seal-dev-secrets.sh` (repo infra) genera `k8s/dev/sealed-secrets.yaml` cifrado; stage/master mantienen plantillas envsubst inyectadas desde GitHub Secrets (`STAGE_*`/`PROD_*`) en los workflows de CD |
-| 5 | **OpenCost sin manifest de despliegue** (solo datos capturados) | Consistencia bono FinOps | Añadir manifest/helm de instalación |
-| 6 | **Script scale-to-zero** documentado pero inexistente en `scripts/` | Consistencia bono FinOps | Crear script `az aks stop/start` programado |
+| 5 | ~~**OpenCost sin automatización de despliegue**~~ | — | ✅ **RESUELTO**: `scripts/install-opencost.sh` instala OpenCost 1.120 mediante Helm y permite desplegar un Prometheus dedicado |
+| 6 | ~~**Script scale-to-zero inexistente**~~ | — | ✅ **RESUELTO**: `scripts/scale-to-zero.sh` ejecuta `az aks stop/start` para dev/stage; para el AKS real deben definirse `AZURE_RG_DEV=rg-circle-guard-dev` y `AKS_CLUSTER_DEV=cg-aks-dev` |
 | 7 | ~~**Dashboards Grafana escasos**~~ | — | ✅ **RESUELTO**: 8 dashboards por servicio (uid `cg-svc-<name>`) en `circleguard-infra/observability/grafana/dashboards/services/` + ConfigMap in-cluster `k8s/master/observability/grafana-dashboards-services-configmap.yaml` |
 | 8 | **HPA solo en master** | Menor (stage/dev opcional) | HPA en stage si se quiere paridad |
 

@@ -57,6 +57,10 @@ neo4jdata/
 # Environment variables (secrets)
 .env
 
+# Kubernetes credentials (secrets)
+kubeconfig*
+kc-*.yaml
+
 # AI/Claude context
 .claude/
 

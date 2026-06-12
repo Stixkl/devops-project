@@ -35,7 +35,7 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 | Service Mesh | Linkerd (mTLS, canary 90/10, retries, circuit breaking) |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) |
 | CD | GitHub Actions (`cd-dev.yml`, `cd-stage.yml` y job `deploy-prod` de `ci.yml` con aprobación manual) |
-| Registro | Docker Hub (`juanamor8/circleguard-*`) |
+| Registro | Docker Hub (`stixk/circleguard-*`) |
 | IaC | Terraform sobre Azure (AKS, VNets, ACR, backend remoto en Azure Storage) |
 | Observabilidad | Prometheus · Grafana · Alertmanager · ELK (Elasticsearch/Logstash/Kibana) · Filebeat · Jaeger (OTLP) |
 | Resiliencia | Resilience4j (Circuit Breaker, Retry), Feature Toggles, configuración externa |
@@ -86,7 +86,7 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 
 | Entorno | Namespace | Características |
 |---------|-----------|-----------------|
-| dev | `circleguard-dev` | 2 réplicas servicios, probes liveness/readiness, Linkerd inject |
+| dev | `circleguard-dev` | 1 réplica por servicio, probes startup/liveness/readiness, recursos ajustados para 2× B2s |
 | stage | `circleguard-stage` | 3+ réplicas, HPA, pruebas de integración/E2E |
 | master (prod) | `circleguard-master` | 3+ réplicas, **HPA min=3 max=10**, RollingUpdate, anti-affinity |
 
@@ -97,10 +97,10 @@ El proyecto se desarrolla como **Proyecto Final de Ingeniería de Software V** (
 
 ### 4.3 Terraform / Azure (`circleguard-infra/terraform/`)
 
-- Módulo reutilizable `modules/aks-cluster` instanciado 3 veces (dev/stage/prod) con `envs/*.tfvars`.
-- **dev**: 1 nodepool (2× B2s) · **stage**: 2 nodepools (3× B2ms + burst Spot 0-3) · **prod**: system 3× B4ms + user 5× B2ms con autoscaling, ACR Standard.
-- Backend remoto: Azure Storage (`tfstate`, state locking).
-- FinOps: Spot instances (-90 %), scale-to-zero nocturno/fines de semana (-65 % no-prod), VMs B-series, etiquetado para asignación de costos. Costo estimado total ≈ **$1,087/mes**.
+- Roots aislados en `terraform/environments/{dev,stage,prod}/`; cada root instancia solo su clúster y usa un state independiente.
+- **dev real**: `cg-aks-dev`, 2× B2s, Kubernetes 1.33.12 en `centralus`. **stage/prod**: definidos como IaC, no desplegados en la suscripción Students por restricciones de Spot/capacidad.
+- Backend remoto: Azure Storage (`tfstate`) con keys `dev.tfstate`, `stage.tfstate` y `prod.tfstate`.
+- FinOps: `scripts/scale-to-zero.sh`, VMs B-series, etiquetado de costos y análisis OpenCost. Las estimaciones stage/prod representan la arquitectura diseñada, no recursos activos.
 
 ---
 
@@ -188,6 +188,7 @@ Detalle en `docs/DESIGN_PATTERNS.md`.
 | Manual de ejecución/operación | `docs/MANUAL_EJECUCION.md` |
 | Pipelines CI/CD | `docs/PIPELINES.md` |
 | Terraform / IaC | `docs/TERRAFORM.md` |
+| Despliegue real en Azure AKS | `docs/DESPLIEGUE_AZURE.md` |
 | Estrategia de pruebas | `docs/TESTING_STRATEGY.md` |
 | Patrones de diseño | `docs/DESIGN_PATTERNS.md` |
 | Observabilidad | `circleguard-infra/observability/README.md` |
@@ -214,7 +215,7 @@ circleguard-infra/             # Repo de infraestructura
 │                              # https://github.com/JuanAmor8/circleguard-infra
 ├── k8s/                       # Manifiestos por entorno + mesh + ingress + dr
 │   ├── namespaces/  dev/  stage/  master/  mesh/
-├── terraform/                 # IaC Azure (módulo aks-cluster + gke-cluster + envs)
+├── terraform/                 # IaC Azure (módulos + roots environments/dev|stage|prod)
 ├── observability/             # Prometheus, Grafana, Logstash, Alertmanager
 ├── chaos/                     # Experimentos Chaos Mesh
 ├── multicloud/                # Demo failover kind ×2 + HAProxy
