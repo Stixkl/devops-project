@@ -1,6 +1,6 @@
 # Metodología Ágil — CircleGuard
 
-## Marco elegido: Scrum (adaptado a equipo de 2)
+## Marco elegido: Scrum (adaptado a equipo de 3)
 
 - **Sprints** de 2 semanas, 2 iteraciones completas ejecutadas.
 - **Roles**: Product Owner rotativo (define prioridad contra la rúbrica),
