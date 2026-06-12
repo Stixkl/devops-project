@@ -1,10 +1,14 @@
 # Bonus — Implementación Multi-Cloud
 
-Cobertura de los 4 requisitos del bonus con enfoque **IaC real + demo local
-funcional** (sin gasto cloud): Terraform completo para el segundo proveedor
-(GKE), estrategia de respaldo entre clouds (Velero activo-pasivo), balanceo de
-carga entre proveedores **demostrado en vivo** (HAProxy sobre dos clusters
-kind que simulan los dos clouds), y comparativa de rendimiento/costos.
+Cobertura de los 4 requisitos del bonus. El segundo proveedor (GCP/GKE) tiene
+**IaC desplegable real** — root Terraform aislado `terraform/environments/gcp-dr/`
+con cluster zonal spot + bucket GCS + SA de Velero — más overlay de app
+(`k8s/gcp/`) y workflow `cd-gcp.yml`. Runbook completo en
+`docs/DESPLIEGUE_GCP.md` (la ejecución contra el cloud real requiere
+credenciales GCP). Estrategia de respaldo entre clouds (Velero activo-pasivo,
+AKS→GCS), balanceo de carga entre proveedores (HAProxy `multicloud/haproxy.real.cfg`
+sobre las IPs públicas reales de ambos clouds; demo local con dos clusters kind
+en `multicloud/`), y comparativa de rendimiento/costos.
 
 ## Arquitectura
 
@@ -36,10 +40,12 @@ kind que simulan los dos clouds), y comparativa de rendimiento/costos.
   con state separado (`dev.tfstate`/`stage.tfstate`/`prod.tfstate`).
 - **GCP (respaldo)**: módulo espejo `circleguard-infra/terraform/modules/gke-cluster`
   (`google_container_cluster` + node pools con autoscaling y Spot, interfaz
-  de variables equivalente a la del módulo AKS) instanciado en
-  `terraform/multicloud.tf` como `gke_dr` (región `us-central1`), activable
-  con `-var enable_gke_dr=true -var gcp_project_id=...` — así los pipelines
-  sin credenciales GCP no lo tocan.
+  de variables equivalente a la del módulo AKS) instanciado en el root aislado
+  `circleguard-infra/terraform/environments/gcp-dr/` como `cg-gke-dr` (zonal
+  `us-central1-a`, 2× `e2-medium` spot), con state separado (`gcp-dr.tfstate`).
+  El root también crea el bucket GCS `cg-velero-dr-<project>` y la SA de Velero.
+  Desplegable real con `terraform apply -var-file=gcp-dr.tfvars` (ver
+  `docs/DESPLIEGUE_GCP.md`).
 - **Validación**: `terraform init -backend=false && terraform validate` →
   `Success! The configuration is valid` (incluye ambos providers).
 
@@ -89,6 +95,10 @@ Traffic Manager / GCP Cloud DNS con health checks equivalentes.
 
 ## 4. Comparativa entre clouds
 
+> Números reales AKS vs GKE (loop curl contra las IPs públicas de cada gateway)
+> se capturan al ejecutar el runbook `docs/DESPLIEGUE_GCP.md` §7 y se pegan aquí.
+> Abajo, el benchmark de la demo local mientras tanto.
+
 **Benchmark local** (20 req por sitio, misma máquina — mide el camino completo
 LB→NodePort→pod; en clouds reales dominaría la geografía):
 
@@ -113,6 +123,10 @@ gcp-sim:   promedio 212.3 ms (20 req)
 | Pieza | Ruta |
 |---|---|
 | Módulo GKE | `circleguard-infra/terraform/modules/gke-cluster/` |
-| Instancia DR | `circleguard-infra/terraform/multicloud.tf` |
-| Respaldo cruzado | `circleguard-infra/k8s/dr/velero-schedule.yaml` |
-| Demo balanceo | `circleguard-infra/multicloud/` (kind ×2 + HAProxy + README) |
+| Root DR (real) | `circleguard-infra/terraform/environments/gcp-dr/` (cluster + bucket Velero + SA) |
+| Overlay app GKE | `circleguard-infra/k8s/gcp/` + `k8s/namespaces/namespace-dr.yaml` |
+| Re-sellado secretos GKE | `circleguard-infra/scripts/seal-gcp-secrets.sh` |
+| Workflow CD GKE | `devops-project/.github/workflows/cd-gcp.yml` |
+| Respaldo cruzado | `circleguard-infra/k8s/dr/velero-schedule.yaml` + `scripts/velero-install-gcp.sh` |
+| Balanceo (real + demo) | `circleguard-infra/multicloud/` (`haproxy.real.cfg` IPs reales + kind ×2) |
+| Runbook | `devops-project/docs/DESPLIEGUE_GCP.md` |
