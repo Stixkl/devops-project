@@ -31,12 +31,54 @@ Trabajo en curso para dejar el pipeline de master 100 % verde. Hecho y verificad
 
 ---
 
+## 0.1 Despliegue real en Azure (2026-06-11, en curso)
+
+Primer despliegue real a Azure (AKS) usando la suscripción **Azure for Students** del equipo. Trabajo hecho sobre el repo `circleguard-infra` (branch `feat/split-terraform-environments`, commit `eb7e271`) y `devops-project` (doc, commit `fd9e55d`). Aún sin push.
+
+### Refactor crítico de Terraform (bug bloqueante encontrado)
+
+`circleguard-infra/terraform/main.tf` declaraba `aks_dev`, `aks_stage` y `aks_prod` **sin condición**, compartiendo un solo state. Cualquier `terraform apply` (o `destroy`) tocaba los tres clústeres a la vez — un apply de dev creaba/destruía también prod. Corregido:
+
+- Root monolítico reemplazado por roots aislados en `terraform/environments/{dev,stage,prod}/`, cada uno instanciando solo su clúster con su propio `key` de state (`dev/stage/prod.tfstate`).
+- Módulo `aks-cluster`: `min_count`/`max_count` a `null` cuando autoscaling está off (requisito del provider); mismo fix en pools adicionales.
+- Subnet: removida la `delegation` a `Microsoft.ContainerService/managedClusters` (incompatible con AKS estándar).
+- `kubernetes_version` `1.29.0` → `1.33` (1.29 no soportada en la región; 1.32 es LTS-only/Premium).
+- Región `eastus` → `centralus` (ver restricción Students abajo).
+
+### Restricciones descubiertas en Azure for Students
+
+- **Policy `sys.regionrestriction`**: solo permite `westus3, northcentralus, centralus, chilecentral, canadacentral`. `eastus` bloqueada. Se usó `centralus`.
+- **Spot NO disponible**: el pool `burst` de stage y todo nodo Spot fallan → solo se desplegó **dev** (sin Spot). Stage/prod quedan como IaC + demo.
+- **Providers** `Microsoft.Storage` y `Microsoft.ContainerService` no venían registrados; se registraron con `az provider register`.
+- **Cluster AAD-enabled**: `kubectl` exige `kubelogin` (no instalado). Workaround para CI/CD: `az aks get-credentials --admin` (kubeconfig por certificado, sin kubelogin).
+
+### Estado del despliegue
+
+| Pieza | Estado |
+|---|---|
+| Backend remoto TF | ✅ RG `rg-terraform-state`, Storage Account `cgtf816751`, container `tfstate`, key `dev.tfstate` (centralus) |
+| AKS `cg-aks-dev` | ✅ desplegado — 2× `Standard_B2s`, K8s v1.33.12, 2 nodos Ready |
+| Roots dev/stage/prod | ✅ separados, `terraform validate` OK |
+| GitHub environment `dev` + secret `KUBE_CONFIG_DEV` | ✅ creado/seteado (gh autenticado como Stixkl, admin del repo `Stixkl/devops-project`) |
+| Sealed Secrets controller | ✅ instalado en cg-aks-dev (v0.27.1, namespace `kube-system`, Running); namespace `circleguard-dev` creado |
+| Secrets `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` | ⚠️ username correcto = `stixk` (login validado local 2026-06-11); falta setear `DOCKERHUB_USERNAME=stixk` y un PAT nuevo en GitHub Secrets |
+
+### Bloqueos pendientes
+
+1. **DockerHub**: el username de login real es `stixk` (validado con `docker login -u stixk` OK, 2026-06-11; ojo: la pantalla de DockerHub muestra `docker login -u stixx`, pero ese da `unauthorized`). Corregido el hardcode `REGISTRY_USER=juanamor8`→`stixk` en los 3 workflows (`cd-dev.yml:14`, `cd-stage.yml:14`, `ci.yml:455/464/480/524`) y en los 8 `circleguard-infra/k8s/dev/deployment-*.yaml`. El namespace de las imágenes, el `DOCKERHUB_USERNAME` y el dueño del token deben ser `stixk`. Pendiente: setear secrets GitHub `DOCKERHUB_USERNAME=stixk` + PAT nuevo.
+2. ~~**Bug de tag de imagen**~~: ❌ falso. `matrix.service` ya incluye el sufijo `-service` (`auth-service`, etc.), así que build taggea `circleguard-auth-service` (`cd-dev.yml:53`) y deploy referencia `circleguard-auth-service` (`cd-dev.yml:91`, `circleguard-${svc}-service` con `svc=auth`). Coinciden los 8. No hay mismatch.
+3. **Re-sellar Sealed Secrets**: el `k8s/dev/sealed-secrets.yaml` actual está cifrado con la clave del clúster viejo. Re-sellar para cg-aks-dev requiere los **valores en texto plano** (no se pueden descifrar sin la clave privada del clúster original). Pendiente de los secretos fuente.
+4. **Push de branches** + push a rama `dev` para disparar `cd-dev.yml`.
+5. **FinOps**: apagar nodos entre demos con `circleguard-infra/terraform/scripts/aks-stop-start.sh` para no agotar el crédito Students.
+
+---
+
 ## 1. Cumplimiento por rubro
 
 | # | Rubro (peso) | Estado | Evidencia clave |
 |---|--------------|--------|-----------------|
 | 1 | Metodología ágil y branching (10 %) | ✅ Completo | `docs/AGILE_METHODOLOGY.md` (Scrum, 2 sprints HU-01→HU-11), `BRANCHING_STRATEGY.md` (GitHub Flow + Conventional Commits), `BACKLOG.md` (9 épicas mapeadas a rúbrica), 47+ commits convencionales, ramas feature/release reales |
-| 2 | Terraform IaC (20 %) | ✅ Completo | Módulos `circleguard-infra/terraform/modules/aks-cluster` y `gke-cluster`; 3 ambientes con `envs/*.tfvars`; backend remoto azurerm (`providers.tf:18` + `circleguard-infra/terraform/scripts/init-backend.sh`); diagrama en `docs/architecture/circleguard-architecture.drawio` |
+| 2 | Terraform IaC (20 %) | ✅ Completo | Módulos `circleguard-infra/terraform/modules/aks-cluster` y `gke-cluster`; 3 ambientes en roots aislados `terraform/environments/{dev,stage,prod}/` con state separado por entorno (refactor 2026-06-11, ver §0.1); backend remoto azurerm; **desplegado real en Azure** (`cg-aks-dev` en centralus); diagrama en `docs/architecture/circleguard-architecture.drawio` |
 | 3 | Patrones de diseño (10 %) | ✅ Completo | Circuit Breaker R4j en 3 clientes con fallbacks (`PromotionClient`, `IdentityClient`, `AuthServiceClient`); Retry (`PushServiceImpl` + `@EnableRetry`); Feature Toggle doble (property `DashboardProperties` + DB `SystemSettings`); External Configuration (`@ConfigurationProperties` + ConfigMaps); 10 patrones existentes catalogados en `docs/DESIGN_PATTERNS.md` |
 | 4 | CI/CD avanzado (15 %) | ✅ Completo | Todo en GitHub Actions: SonarQube (`ci.yml` job `sonarqube` + plugin Gradle); Trivy (`ci.yml` job `docker-build-scan`); versionado semántico (semantic-release, job `release`); CD por rama (`cd-dev.yml` dev, `cd-stage.yml` release/**, job `deploy-prod` de `ci.yml`); notificaciones de fallo (issue GitHub label `cd-failure` + Slack opcional); approval gate de producción vía environment `production` con required reviewers |
 | 5 | Pruebas completas (15 %) | ✅ Completo | 56 unitarias (8 servicios), 7 de integración (`tests/integration-tests`), 5 specs E2E Cypress, Locust con 4 clases de usuario, **OWASP ZAP baseline** (`ci.yml:276`), JaCoCo con verificación 70 % + codecov; todo automatizado en pipelines |

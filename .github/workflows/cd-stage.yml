@@ -11,7 +11,7 @@ concurrency:
 
 env:
   INFRA_REPO: JuanAmor8/circleguard-infra
-  REGISTRY_USER: juanamor8
+  REGISTRY_USER: stixk
 
 jobs:
   build-push:

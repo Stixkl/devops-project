@@ -452,7 +452,7 @@ jobs:
         with:
           context: .
           file: services/circleguard-${{ matrix.service }}/Dockerfile
-          tags: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          tags: stixk/circleguard-${{ matrix.service }}:${{ github.sha }}
           load: true
           push: false
           cache-from: type=gha,scope=${{ matrix.service }}
@@ -461,7 +461,7 @@ jobs:
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          image-ref: stixk/circleguard-${{ matrix.service }}:${{ github.sha }}
           format: sarif
           output: trivy-${{ matrix.service }}.sarif
           severity: CRITICAL,HIGH
@@ -477,7 +477,7 @@ jobs:
       - name: Trivy scan (fail on CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: juanamor8/circleguard-${{ matrix.service }}:${{ github.sha }}
+          image-ref: stixk/circleguard-${{ matrix.service }}:${{ github.sha }}
           format: table
           severity: CRITICAL
           ignore-unfixed: true
@@ -521,7 +521,7 @@ jobs:
       name: production
       url: https://circleguard.example.com
     env:
-      REGISTRY_USER: juanamor8
+      REGISTRY_USER: stixk
       DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
       DB_URL: ${{ secrets.PROD_DB_URL }}
       DB_USERNAME: ${{ secrets.PROD_DB_USERNAME }}
