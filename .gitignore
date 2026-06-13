@@ -80,6 +80,5 @@ replay_pid*
 
 # Local test uploads
 services/circleguard-file-service/uploads/
-TESTING_REPORT.md
 commit_msg.txt
 Taller de pruebas y release 261.md
